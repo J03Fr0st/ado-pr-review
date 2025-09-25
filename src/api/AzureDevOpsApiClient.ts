@@ -555,7 +555,7 @@ export class AzureDevOpsApiClient {
    */
   private invalidateCache(pattern: string): void {
     // Invalidate memory cache
-    for (const key of this.memoryCache.keys()) {
+    for (const key of Array.from(this.memoryCache.keys())) {
       if (key.includes(pattern)) {
         this.memoryCache.delete(key);
       }
