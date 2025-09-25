@@ -1,0 +1,302 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop, release/*]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18.x'
+  EXTENSION_NAME: 'ado-pr-reviewer'
+
+jobs:
+  # Lint and type check
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Format check
+        run: npm run format:check
+
+  # Unit and integration tests
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          ADO_TEST_PAT: ${{ secrets.ADO_TEST_PAT }}
+          ADO_TEST_ORG: ${{ secrets.ADO_TEST_ORG }}
+
+      - name: Upload test coverage
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+
+  # End-to-end tests with Playwright
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Package extension for testing
+        run: npm run package
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+        env:
+          ADO_TEST_PAT: ${{ secrets.ADO_TEST_PAT }}
+          ADO_TEST_ORG: ${{ secrets.ADO_TEST_ORG }}
+          ADO_TEST_PROJECT: ${{ secrets.ADO_TEST_PROJECT }}
+          EXTENSION_PATH: ./dist/${{ env.EXTENSION_NAME }}-test.vsix
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-test-results-${{ runner.os }}
+          path: |
+            test-results/
+            playwright-report/
+
+  # Security scanning
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security audit
+        run: npm audit --audit-level moderate
+
+      - name: Run CodeQL Analysis
+        uses: github/codeql-action/init@v3
+        with:
+          languages: typescript, javascript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  # Package extension
+  package:
+    needs: [quality, test, e2e, security]
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            VERSION=$(npm version patch --no-git-tag-version)
+            echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            VERSION=$(npm version prerelease --preid=rc --no-git-tag-version)
+            echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          else
+            VERSION=$(npm version prerelease --preid=dev --no-git-tag-version)
+            echo "version=${VERSION#v}" >> $GITHUB_OUTPUT
+            echo "prerelease=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update changelog
+        if: github.ref == 'refs/heads/main'
+        run: |
+          npx conventional-changelog-cli -p conventionalcommits -i CHANGELOG.md -s -r 0
+          git add CHANGELOG.md package.json
+          git commit -m "chore: release v${{ steps.version.outputs.version }}" || true
+
+      - name: Package extension
+        run: |
+          npm run build
+          npx vsce package --no-yarn --out ./dist/
+
+      - name: Sign extension (production only)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "${{ secrets.EXTENSION_SIGNING_CERT }}" | base64 -d > signing-cert.p12
+          npx @vscode/vsce sign --certificate signing-cert.p12 --password "${{ secrets.CERT_PASSWORD }}" ./dist/*.vsix
+          rm signing-cert.p12
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-package
+          path: |
+            ./dist/*.vsix
+            ./CHANGELOG.md
+            ./package.json
+
+      - name: Create GitHub Release
+        if: github.ref == 'refs/heads/main'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          release_name: Release v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ steps.version.outputs.prerelease }}
+
+  # Deploy to internal preview
+  deploy-internal:
+    needs: [package]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: internal-preview
+      url: https://internal-extensions.company.com
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-package
+
+      - name: Deploy to internal registry
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.INTERNAL_REGISTRY_TOKEN }}" \
+            -F "extension=@./dist/${{ env.EXTENSION_NAME }}-${{ needs.package.outputs.version }}.vsix" \
+            -F "version=${{ needs.package.outputs.version }}" \
+            -F "prerelease=${{ needs.package.outputs.prerelease }}" \
+            "${{ secrets.INTERNAL_REGISTRY_URL }}/upload"
+
+  # Deploy to public preview
+  deploy-preview:
+    needs: [package]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/release/')
+    environment:
+      name: public-preview
+      url: https://marketplace.visualstudio.com/items?itemName=company.ado-pr-reviewer
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-package
+
+      - name: Publish to VS Code Marketplace (preview)
+        run: |
+          npx vsce publish --pre-release \
+            --packagePath ./dist/${{ env.EXTENSION_NAME }}-${{ needs.package.outputs.version }}.vsix \
+            --pat ${{ secrets.VSCE_PAT }}
+
+  # Deploy to production
+  deploy-production:
+    needs: [package]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://marketplace.visualstudio.com/items?itemName=company.ado-pr-reviewer
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-package
+
+      - name: Publish to VS Code Marketplace
+        run: |
+          npx vsce publish \
+            --packagePath ./dist/${{ env.EXTENSION_NAME }}-${{ needs.package.outputs.version }}.vsix \
+            --pat ${{ secrets.VSCE_PAT }}
+
+      - name: Notify deployment success
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "✅ Azure DevOps PR Reviewer v${{ needs.package.outputs.version }} deployed to VS Code Marketplace",
+              "channel": "#devops-notifications"
+            }' \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Post-deployment monitoring
+  monitor:
+    needs: [deploy-production]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - name: Trigger monitoring checks
+        run: |
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.MONITORING_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "extension": "${{ env.EXTENSION_NAME }}",
+              "version": "${{ needs.package.outputs.version }}",
+              "checks": ["marketplace-availability", "download-metrics", "error-rates"]
+            }' \
+            "${{ secrets.MONITORING_API_URL }}/trigger-checks"

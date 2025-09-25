@@ -1,0 +1,453 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'preview'
+        type: choice
+        options:
+          - internal
+          - preview
+          - production
+      version:
+        description: 'Version to deploy (optional, uses latest if empty)'
+        required: false
+        type: string
+
+env:
+  NODE_VERSION: '18.x'
+  EXTENSION_NAME: 'ado-pr-reviewer'
+
+jobs:
+  # Determine release parameters
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      version: ${{ steps.env.outputs.version }}
+      should_deploy: ${{ steps.env.outputs.should_deploy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine deployment parameters
+        id: env
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            ENV="${{ github.event.inputs.environment }}"
+            VERSION="${{ github.event.inputs.version }}"
+            SHOULD_DEPLOY="true"
+          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG_VERSION=${GITHUB_REF#refs/tags/v}
+            if [[ "$TAG_VERSION" == *-rc* ]]; then
+              ENV="preview"
+            elif [[ "$TAG_VERSION" == *-* ]]; then
+              ENV="internal"
+            else
+              ENV="production"
+            fi
+            VERSION="$TAG_VERSION"
+            SHOULD_DEPLOY="true"
+          else
+            ENV="none"
+            VERSION=""
+            SHOULD_DEPLOY="false"
+          fi
+
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "should_deploy=$SHOULD_DEPLOY" >> $GITHUB_OUTPUT
+
+          echo "🎯 Environment: $ENV"
+          echo "🏷️ Version: $VERSION"
+          echo "🚀 Should Deploy: $SHOULD_DEPLOY"
+
+  # Build and package extension
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      package_name: ${{ steps.package.outputs.package_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set version if specified
+        if: needs.prepare.outputs.version != ''
+        run: |
+          npm version ${{ needs.prepare.outputs.version }} --no-git-tag-version --allow-same-version
+
+      - name: Package extension
+        id: package
+        run: |
+          NODE_ENV=${{ needs.prepare.outputs.environment }} node scripts/package.js
+          PACKAGE_NAME=$(ls dist/*.vsix | head -n1)
+          echo "package_name=$(basename $PACKAGE_NAME)" >> $GITHUB_OUTPUT
+        env:
+          EXTENSION_SIGNING_CERT: ${{ secrets.EXTENSION_SIGNING_CERT }}
+          CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-release
+          path: |
+            dist/*.vsix
+            dist/*.sha256
+            dist/manifest.json
+          retention-days: 30
+
+  # Security and quality checks
+  security:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level high
+
+      - name: Dependency vulnerability scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      - name: Download package
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-release
+          path: dist/
+
+      - name: Scan package for secrets
+        run: |
+          # Extract and scan VSIX contents
+          unzip -q dist/*.vsix -d temp_extract/
+
+          # Check for common secret patterns
+          if grep -r -E "(password|secret|token|key)" temp_extract/ --include="*.js" --include="*.json"; then
+            echo "⚠️ Potential secrets found in package"
+            exit 1
+          fi
+
+          echo "✅ No secrets detected in package"
+
+  # Deploy to internal environment
+  deploy-internal:
+    needs: [prepare, build, security]
+    if: needs.prepare.outputs.environment == 'internal'
+    runs-on: ubuntu-latest
+    environment:
+      name: internal
+      url: ${{ steps.deploy.outputs.deployment_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download package
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-release
+          path: dist/
+
+      - name: Deploy to internal
+        id: deploy
+        run: |
+          DEPLOY_ENV=internal node scripts/deploy.js
+          echo "deployment_url=$INTERNAL_REGISTRY_URL" >> $GITHUB_OUTPUT
+        env:
+          INTERNAL_REGISTRY_URL: ${{ secrets.INTERNAL_REGISTRY_URL }}
+          INTERNAL_REGISTRY_TOKEN: ${{ secrets.INTERNAL_REGISTRY_TOKEN }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Run smoke tests
+        run: |
+          # Basic smoke tests for internal deployment
+          echo "🧪 Running internal deployment smoke tests..."
+          sleep 10
+
+          # Test internal registry health
+          curl -f "${{ secrets.INTERNAL_REGISTRY_URL }}/health" || exit 1
+
+          echo "✅ Smoke tests passed"
+
+  # Deploy to preview environment
+  deploy-preview:
+    needs: [prepare, build, security]
+    if: needs.prepare.outputs.environment == 'preview'
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+      url: https://marketplace.visualstudio.com/items?itemName=company.ado-pr-reviewer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download package
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-release
+          path: dist/
+
+      - name: Deploy to preview
+        run: |
+          DEPLOY_ENV=preview node scripts/deploy.js
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      - name: Post-deployment validation
+        run: |
+          echo "🔍 Validating preview deployment..."
+
+          # Wait for marketplace propagation
+          sleep 30
+
+          # Check marketplace listing
+          EXTENSION_URL="https://marketplace.visualstudio.com/items?itemName=company.ado-pr-reviewer"
+          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" "$EXTENSION_URL")
+
+          if [[ "$HTTP_STATUS" == "200" ]]; then
+            echo "✅ Extension found in marketplace"
+          else
+            echo "⚠️ Extension not yet visible in marketplace (status: $HTTP_STATUS)"
+          fi
+
+      - name: Create preview announcement
+        run: |
+          # Create discussion post for preview release
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/discussions \
+            -f title="🚀 Preview Release: v${{ needs.prepare.outputs.version }}" \
+            -f body="Azure DevOps PR Reviewer v${{ needs.prepare.outputs.version }} is now available in preview!
+
+          Install via:
+          \`\`\`
+          code --install-extension company.ado-pr-reviewer@${{ needs.prepare.outputs.version }}
+          \`\`\`
+
+          Please test and provide feedback on any issues." \
+            -f category_id="Q_kwDOGvhZGs4COm_K"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Deploy to production environment
+  deploy-production:
+    needs: [prepare, build, security]
+    if: needs.prepare.outputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://marketplace.visualstudio.com/items?itemName=company.ado-pr-reviewer
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download package
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-release
+          path: dist/
+
+      - name: Production readiness check
+        run: |
+          echo "🔍 Production readiness checks..."
+
+          # Verify package is signed
+          if ! jq -r '.signed' dist/manifest.json | grep -q "true"; then
+            echo "❌ Package must be signed for production"
+            exit 1
+          fi
+
+          # Verify no pre-release version
+          VERSION=$(jq -r '.version' dist/manifest.json)
+          if [[ "$VERSION" == *-* ]]; then
+            echo "❌ Production cannot deploy pre-release version: $VERSION"
+            exit 1
+          fi
+
+          # Check for required documentation
+          if [[ ! -f "README.md" ]]; then
+            echo "❌ README.md required for production"
+            exit 1
+          fi
+
+          echo "✅ Production readiness checks passed"
+
+      - name: Deploy to production
+        run: |
+          DEPLOY_ENV=production node scripts/deploy.js
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          MONITORING_WEBHOOK_URL: ${{ secrets.MONITORING_WEBHOOK_URL }}
+
+      - name: Create GitHub release
+        run: |
+          # Create GitHub release with artifacts
+          gh release create v${{ needs.prepare.outputs.version }} \
+            --title "Azure DevOps PR Reviewer v${{ needs.prepare.outputs.version }}" \
+            --notes-file <(echo "## What's New
+
+          See [CHANGELOG.md](./CHANGELOG.md) for detailed changes.
+
+          ## Installation
+
+          Install directly from VS Code Marketplace or run:
+          \`\`\`
+          code --install-extension company.ado-pr-reviewer
+          \`\`\`
+
+          ## Support
+
+          - [Documentation](./docs/)
+          - [Issue Tracker](https://github.com/${{ github.repository }}/issues)
+          - [Discussions](https://github.com/${{ github.repository }}/discussions)") \
+            dist/*.vsix dist/*.sha256 dist/manifest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update marketplace metadata
+        run: |
+          # Update extension metadata if needed
+          echo "📝 Updating marketplace metadata..."
+
+          # This could include updating categories, tags, etc.
+          # Implementation depends on marketplace API capabilities
+
+  # Post-deployment monitoring and validation
+  monitor:
+    needs: [prepare, deploy-internal, deploy-preview, deploy-production]
+    if: always() && needs.prepare.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup monitoring
+        run: |
+          echo "📊 Setting up post-deployment monitoring..."
+
+          ENV="${{ needs.prepare.outputs.environment }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
+
+          # Trigger monitoring alerts
+          curl -X POST \
+            -H "Authorization: Bearer ${{ secrets.MONITORING_API_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"extension\": \"${{ env.EXTENSION_NAME }}\",
+              \"version\": \"$VERSION\",
+              \"environment\": \"$ENV\",
+              \"checks\": [\"availability\", \"performance\", \"error-rates\", \"user-adoption\"]
+            }" \
+            "${{ secrets.MONITORING_API_URL }}/monitor-deployment" || true
+
+      - name: Schedule health checks
+        run: |
+          echo "🔍 Scheduling ongoing health checks..."
+
+          # Schedule health check workflow for next 24 hours
+          gh workflow run health-check.yml \
+            -f environment="${{ needs.prepare.outputs.environment }}" \
+            -f version="${{ needs.prepare.outputs.version }}" \
+            -f duration="24h"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Rollback capability
+  rollback:
+    if: failure() && needs.prepare.outputs.environment == 'production'
+    needs: [prepare, build, deploy-production]
+    runs-on: ubuntu-latest
+    environment:
+      name: production-rollback
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initiate rollback
+        run: |
+          echo "🔄 Initiating production rollback..."
+
+          # Get previous successful version
+          PREVIOUS_VERSION=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/releases \
+            --jq '.[] | select(.prerelease == false) | .tag_name' \
+            | head -n2 | tail -n1)
+
+          if [[ -n "$PREVIOUS_VERSION" ]]; then
+            echo "Rolling back to version: $PREVIOUS_VERSION"
+
+            # Trigger rollback deployment
+            gh workflow run deploy-rollback.yml \
+              -f version="$PREVIOUS_VERSION" \
+              -f reason="Automated rollback due to deployment failure"
+          else
+            echo "❌ No previous version found for rollback"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify rollback
+        run: |
+          # Send rollback notification
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "🔄 Production rollback initiated for Azure DevOps PR Reviewer due to deployment failure",
+              "channel": "#critical-alerts"
+            }' \
+            "${{ secrets.SLACK_WEBHOOK_URL }}"

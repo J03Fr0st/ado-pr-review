@@ -1,0 +1,430 @@
+name: Health Check
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to check'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - internal
+          - preview
+          - production
+      version:
+        description: 'Specific version to monitor'
+        required: false
+        type: string
+      duration:
+        description: 'Monitoring duration'
+        required: false
+        default: '1h'
+        type: string
+
+env:
+  EXTENSION_NAME: 'ado-pr-reviewer'
+  PUBLISHER: 'company'
+
+jobs:
+  # Health check for internal deployment
+  check-internal:
+    if: github.event.inputs.environment == 'internal' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check internal registry health
+        id: internal-check
+        run: |
+          echo "🔍 Checking internal registry health..."
+
+          # Check registry endpoint
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "${{ secrets.INTERNAL_REGISTRY_URL }}/health")
+
+          if [[ "$RESPONSE" == "200" ]]; then
+            echo "✅ Internal registry healthy"
+            echo "status=healthy" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Internal registry unhealthy (HTTP $RESPONSE)"
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      - name: Check extension availability
+        run: |
+          echo "📦 Checking extension availability in internal registry..."
+
+          # Query extension details
+          curl -H "Authorization: Bearer ${{ secrets.INTERNAL_REGISTRY_TOKEN }}" \
+               "${{ secrets.INTERNAL_REGISTRY_URL }}/api/extensions/${{ env.EXTENSION_NAME }}" \
+               -f -s > extension_info.json
+
+          VERSION=$(jq -r '.version' extension_info.json)
+          DOWNLOADS=$(jq -r '.downloadCount' extension_info.json)
+
+          echo "📊 Extension version: $VERSION"
+          echo "📈 Download count: $DOWNLOADS"
+
+      - name: Run functional tests
+        run: |
+          echo "🧪 Running functional health tests..."
+
+          # Test extension installation endpoint
+          curl -X POST \
+               -H "Authorization: Bearer ${{ secrets.INTERNAL_REGISTRY_TOKEN }}" \
+               -H "Content-Type: application/json" \
+               -d '{"action": "test-install", "extension": "${{ env.EXTENSION_NAME }}"}' \
+               "${{ secrets.INTERNAL_REGISTRY_URL }}/api/test" \
+               -f -s
+
+          echo "✅ Functional tests passed"
+
+  # Health check for marketplace (preview/production)
+  check-marketplace:
+    if: github.event.inputs.environment == 'preview' || github.event.inputs.environment == 'production' || github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check marketplace availability
+        id: marketplace-check
+        run: |
+          EXTENSION_ID="${{ env.PUBLISHER }}.${{ env.EXTENSION_NAME }}"
+          MARKETPLACE_URL="https://marketplace.visualstudio.com/items?itemName=$EXTENSION_ID"
+
+          echo "🔍 Checking marketplace availability..."
+          echo "🔗 URL: $MARKETPLACE_URL"
+
+          # Check marketplace page
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$MARKETPLACE_URL")
+
+          if [[ "$RESPONSE" == "200" ]]; then
+            echo "✅ Marketplace page accessible"
+            echo "status=healthy" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Marketplace page inaccessible (HTTP $RESPONSE)"
+            echo "status=unhealthy" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check extension metadata
+        run: |
+          echo "📊 Checking extension metadata..."
+
+          EXTENSION_ID="${{ env.PUBLISHER }}.${{ env.EXTENSION_NAME }}"
+
+          # Get extension metadata from marketplace API
+          curl -X POST \
+               -H "Content-Type: application/json" \
+               -H "Accept: application/json;api-version=6.0-preview.1" \
+               -d '{
+                 "filters": [{
+                   "criteria": [{"filterType": 7, "value": "'"$EXTENSION_ID"'"}]
+                 }],
+                 "flags": 914
+               }' \
+               "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" \
+               -s > marketplace_response.json
+
+          # Parse response
+          EXTENSION_COUNT=$(jq -r '.results[0].extensions | length' marketplace_response.json)
+
+          if [[ "$EXTENSION_COUNT" -gt "0" ]]; then
+            VERSION=$(jq -r '.results[0].extensions[0].versions[0].version' marketplace_response.json)
+            INSTALL_COUNT=$(jq -r '.results[0].extensions[0].statistics[] | select(.statisticName == "install") | .value' marketplace_response.json)
+            RATING=$(jq -r '.results[0].extensions[0].statistics[] | select(.statisticName == "averagerating") | .value' marketplace_response.json)
+
+            echo "📦 Current version: $VERSION"
+            echo "📈 Install count: $INSTALL_COUNT"
+            echo "⭐ Average rating: $RATING"
+
+            # Store metrics for monitoring
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "installs=$INSTALL_COUNT" >> $GITHUB_OUTPUT
+            echo "rating=$RATING" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Extension not found in marketplace"
+            exit 1
+          fi
+
+      - name: Check download functionality
+        run: |
+          echo "📥 Testing extension download..."
+
+          EXTENSION_ID="${{ env.PUBLISHER }}.${{ env.EXTENSION_NAME }}"
+
+          # Try to download extension VSIX
+          curl -L \
+               -H "User-Agent: VSCode" \
+               "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/${{ env.PUBLISHER }}/vsextensions/${{ env.EXTENSION_NAME }}/latest/vspackage" \
+               -o test_download.vsix \
+               -f -s
+
+          # Check downloaded file
+          if [[ -f "test_download.vsix" ]] && [[ $(stat -f%z test_download.vsix 2>/dev/null || stat -c%s test_download.vsix) -gt 1024 ]]; then
+            echo "✅ Extension download successful"
+            rm test_download.vsix
+          else
+            echo "❌ Extension download failed"
+            exit 1
+          fi
+
+  # Performance monitoring
+  performance-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Measure marketplace response times
+        id: performance
+        run: |
+          echo "⏱️ Measuring marketplace performance..."
+
+          EXTENSION_ID="${{ env.PUBLISHER }}.${{ env.EXTENSION_NAME }}"
+          MARKETPLACE_URL="https://marketplace.visualstudio.com/items?itemName=$EXTENSION_ID"
+
+          # Measure page load time
+          START_TIME=$(date +%s%N)
+          curl -s "$MARKETPLACE_URL" > /dev/null
+          END_TIME=$(date +%s%N)
+
+          LOAD_TIME_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+
+          echo "📊 Page load time: ${LOAD_TIME_MS}ms"
+          echo "load_time=$LOAD_TIME_MS" >> $GITHUB_OUTPUT
+
+          # Check against threshold (5 seconds)
+          if [[ $LOAD_TIME_MS -gt 5000 ]]; then
+            echo "⚠️ Page load time exceeds threshold (5000ms)"
+            echo "performance_warning=true" >> $GITHUB_OUTPUT
+          else
+            echo "✅ Page load time within acceptable range"
+            echo "performance_warning=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Measure API response times
+        run: |
+          echo "⏱️ Measuring marketplace API performance..."
+
+          # Measure API response time
+          START_TIME=$(date +%s%N)
+          curl -X POST \
+               -H "Content-Type: application/json" \
+               -d '{"filters": [{"criteria": [{"filterType": 7, "value": "${{ env.PUBLISHER }}.${{ env.EXTENSION_NAME }}"}]}], "flags": 914}' \
+               "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" \
+               -s > /dev/null
+          END_TIME=$(date +%s%N)
+
+          API_TIME_MS=$(( (END_TIME - START_TIME) / 1000000 ))
+
+          echo "📊 API response time: ${API_TIME_MS}ms"
+
+          if [[ $API_TIME_MS -gt 3000 ]]; then
+            echo "⚠️ API response time exceeds threshold (3000ms)"
+          else
+            echo "✅ API response time within acceptable range"
+          fi
+
+  # User experience monitoring
+  user-experience-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18.x'
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install chromium
+
+      - name: Test user journey
+        run: |
+          cat > user_journey_test.js << 'EOF'
+          const { chromium } = require('playwright');
+
+          (async () => {
+            const browser = await chromium.launch();
+            const page = await browser.newPage();
+
+            try {
+              console.log('🔍 Testing user journey...');
+
+              // Navigate to extension page
+              const extensionUrl = 'https://marketplace.visualstudio.com/items?itemName=${{ env.PUBLISHER }}.${{ env.EXTENSION_NAME }}';
+              console.log(`📄 Loading ${extensionUrl}`);
+
+              await page.goto(extensionUrl, { waitUntil: 'networkidle' });
+
+              // Check page title
+              const title = await page.title();
+              console.log(`📋 Page title: ${title}`);
+
+              // Check if install button is present
+              const installButton = await page.$('.ux-button.ux-button-primary');
+              if (installButton) {
+                console.log('✅ Install button found');
+              } else {
+                console.log('❌ Install button not found');
+                process.exit(1);
+              }
+
+              // Check if description is visible
+              const description = await page.$('.ux-section-details');
+              if (description) {
+                console.log('✅ Extension description visible');
+              } else {
+                console.log('❌ Extension description not visible');
+                process.exit(1);
+              }
+
+              // Check if ratings section is present
+              const ratings = await page.$('.ux-section-rating');
+              if (ratings) {
+                console.log('✅ Ratings section present');
+              }
+
+              // Take screenshot for manual verification
+              await page.screenshot({ path: 'extension_page.png', fullPage: true });
+              console.log('📸 Screenshot saved as extension_page.png');
+
+              console.log('✅ User journey test completed successfully');
+
+            } catch (error) {
+              console.error('❌ User journey test failed:', error);
+              process.exit(1);
+            } finally {
+              await browser.close();
+            }
+          })();
+          EOF
+
+          node user_journey_test.js
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: user-journey-screenshot
+          path: extension_page.png
+          retention-days: 7
+
+  # Error rate monitoring
+  error-monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check extension error reports
+        run: |
+          echo "🔍 Checking for recent error reports..."
+
+          # This would typically integrate with your telemetry system
+          # For now, we'll check GitHub issues as a proxy
+
+          REPO_ISSUES=$(curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                            "https://api.github.com/repos/${{ github.repository }}/issues?labels=bug&state=open&since=$(date -d '24 hours ago' -Iseconds)" \
+                            -s | jq length)
+
+          echo "📊 Open bug reports in last 24h: $REPO_ISSUES"
+
+          if [[ $REPO_ISSUES -gt 5 ]]; then
+            echo "⚠️ High number of bug reports detected"
+            exit 1
+          else
+            echo "✅ Error rate within acceptable range"
+          fi
+
+  # Notification and alerting
+  notify-results:
+    needs: [check-internal, check-marketplace, performance-check, user-experience-check, error-monitoring]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine overall health
+        id: health
+        run: |
+          # Collect results from all jobs
+          INTERNAL_STATUS="${{ needs.check-internal.result }}"
+          MARKETPLACE_STATUS="${{ needs.check-marketplace.result }}"
+          PERFORMANCE_STATUS="${{ needs.performance-check.result }}"
+          UX_STATUS="${{ needs.user-experience-check.result }}"
+          ERROR_STATUS="${{ needs.error-monitoring.result }}"
+
+          echo "📊 Health Check Results:"
+          echo "  Internal: $INTERNAL_STATUS"
+          echo "  Marketplace: $MARKETPLACE_STATUS"
+          echo "  Performance: $PERFORMANCE_STATUS"
+          echo "  User Experience: $UX_STATUS"
+          echo "  Error Monitoring: $ERROR_STATUS"
+
+          # Determine overall status
+          if [[ "$INTERNAL_STATUS" == "failure" ]] || [[ "$MARKETPLACE_STATUS" == "failure" ]]; then
+            OVERALL="critical"
+          elif [[ "$PERFORMANCE_STATUS" == "failure" ]] || [[ "$UX_STATUS" == "failure" ]] || [[ "$ERROR_STATUS" == "failure" ]]; then
+            OVERALL="warning"
+          else
+            OVERALL="healthy"
+          fi
+
+          echo "overall=$OVERALL" >> $GITHUB_OUTPUT
+
+      - name: Send notifications
+        if: needs.notify-results.outputs.overall != 'healthy'
+        run: |
+          OVERALL_STATUS="${{ steps.health.outputs.overall }}"
+
+          if [[ "$OVERALL_STATUS" == "critical" ]]; then
+            EMOJI="🚨"
+            COLOR="danger"
+            URGENCY="CRITICAL"
+          else
+            EMOJI="⚠️"
+            COLOR="warning"
+            URGENCY="WARNING"
+          fi
+
+          # Send Slack notification
+          curl -X POST \
+               -H "Content-Type: application/json" \
+               -d "{
+                 \"channel\": \"#devops-alerts\",
+                 \"text\": \"$EMOJI Health Check Alert: $URGENCY\",
+                 \"attachments\": [{
+                   \"color\": \"$COLOR\",
+                   \"title\": \"Azure DevOps PR Reviewer Health Check\",
+                   \"fields\": [
+                     {\"title\": \"Status\", \"value\": \"$OVERALL_STATUS\", \"short\": true},
+                     {\"title\": \"Environment\", \"value\": \"${{ github.event.inputs.environment || 'all' }}\", \"short\": true},
+                     {\"title\": \"Timestamp\", \"value\": \"$(date -Iseconds)\", \"short\": true},
+                     {\"title\": \"Workflow\", \"value\": \"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\", \"short\": false}
+                   ]
+                 }]
+               }" \
+               "${{ secrets.SLACK_WEBHOOK_URL }}"
+
+      - name: Create issue for critical failures
+        if: steps.health.outputs.overall == 'critical'
+        run: |
+          gh issue create \
+            --title "🚨 Critical Health Check Failure - $(date -Iseconds)" \
+            --body "## Health Check Failure
+
+          **Overall Status**: Critical
+          **Environment**: ${{ github.event.inputs.environment || 'all' }}
+          **Timestamp**: $(date -Iseconds)
+
+          ### Job Results
+          - Internal: ${{ needs.check-internal.result }}
+          - Marketplace: ${{ needs.check-marketplace.result }}
+          - Performance: ${{ needs.performance-check.result }}
+          - User Experience: ${{ needs.user-experience-check.result }}
+          - Error Monitoring: ${{ needs.error-monitoring.result }}
+
+          ### Action Required
+          Immediate investigation required for production service.
+
+          **Workflow Run**: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --label "bug,critical,health-check" \
+            --assignee "@me"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,174 @@
+{
+  "name": "ado-pr-reviewer",
+  "displayName": "Azure DevOps PR Reviewer",
+  "description": "Streamlined pull request review workflow for Azure DevOps without leaving VS Code",
+  "version": "1.0.0",
+  "publisher": "company",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Azure",
+    "SCM Providers",
+    "Other"
+  ],
+  "keywords": [
+    "azure devops",
+    "pull request",
+    "code review",
+    "ado",
+    "devops"
+  ],
+  "activationEvents": [
+    "onCommand:azureDevOps.configure",
+    "onView:azureDevOpsPRs"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "id": "azureDevOpsPRs",
+          "name": "Azure DevOps PRs",
+          "when": "azureDevOps:configured"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "azureDevOps.configure",
+        "title": "Configure Azure DevOps Connection",
+        "category": "Azure DevOps"
+      },
+      {
+        "command": "azureDevOps.refreshPullRequests",
+        "title": "Refresh Pull Requests",
+        "category": "Azure DevOps",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "azureDevOps.approvePullRequest",
+        "title": "Approve Pull Request",
+        "category": "Azure DevOps"
+      },
+      {
+        "command": "azureDevOps.rejectPullRequest",
+        "title": "Reject Pull Request",
+        "category": "Azure DevOps"
+      },
+      {
+        "command": "azureDevOps.abandonPullRequest",
+        "title": "Abandon Pull Request",
+        "category": "Azure DevOps"
+      },
+      {
+        "command": "azureDevOps.addComment",
+        "title": "Add Comment",
+        "category": "Azure DevOps"
+      },
+      {
+        "command": "azureDevOps.openInBrowser",
+        "title": "Open in Browser",
+        "category": "Azure DevOps"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "azureDevOps.refreshPullRequests",
+          "when": "view == azureDevOpsPRs",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "type": "object",
+      "title": "Azure DevOps PR Reviewer",
+      "properties": {
+        "azureDevOps.organizationUrl": {
+          "type": "string",
+          "description": "Azure DevOps organization URL (e.g., https://dev.azure.com/myorg)",
+          "pattern": "^https://(dev\\.azure\\.com/[^/]+|[^/]+\\.visualstudio\\.com)/?$"
+        },
+        "azureDevOps.project": {
+          "type": "string",
+          "description": "Azure DevOps project name"
+        },
+        "azureDevOps.refreshInterval": {
+          "type": "number",
+          "default": 300,
+          "description": "Auto-refresh interval in seconds (0 to disable)"
+        },
+        "azureDevOps.telemetry.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable telemetry collection for usage analytics and error reporting"
+        },
+        "azureDevOps.telemetry.allowSensitiveData": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow collection of sensitive data for troubleshooting (requires explicit consent)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "npm run clean && npm run compile",
+    "clean": "rimraf out dist",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "webpack": "webpack --mode production",
+    "webpack-dev": "webpack --mode development",
+    "lint": "eslint src --ext ts",
+    "lint:fix": "eslint src --ext ts --fix",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "mocha --require ts-node/register \"tests/unit/**/*.test.ts\"",
+    "test:integration": "mocha --require ts-node/register \"tests/integration/**/*.test.ts\" --timeout 30000",
+    "test:e2e": "playwright test tests/e2e/",
+    "coverage": "nyc npm run test:unit",
+    "package": "node scripts/package.js",
+    "deploy": "node scripts/deploy.js",
+    "health-check": "curl -f https://marketplace.visualstudio.com/items?itemName=company.ado-pr-reviewer"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.74.0",
+    "@types/node": "^18.0.0",
+    "@types/mocha": "^10.0.0",
+    "@types/sinon": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@playwright/test": "^1.28.0",
+    "eslint": "^8.28.0",
+    "prettier": "^2.8.0",
+    "typescript": "^4.9.0",
+    "ts-node": "^10.9.0",
+    "mocha": "^10.1.0",
+    "sinon": "^15.0.0",
+    "nyc": "^15.1.0",
+    "rimraf": "^3.0.2",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.0"
+  },
+  "dependencies": {
+    "vscode-extension-telemetry": "^0.4.5",
+    "axios": "^1.2.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/company/ado-pr-review.git"
+  },
+  "bugs": {
+    "url": "https://github.com/company/ado-pr-review/issues"
+  },
+  "homepage": "https://github.com/company/ado-pr-review#readme",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#0078d4",
+    "theme": "dark"
+  }
+}
