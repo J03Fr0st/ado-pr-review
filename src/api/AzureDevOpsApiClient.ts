@@ -419,7 +419,7 @@ export class AzureDevOpsApiClient {
   /**
    * Generic GET request with caching support
    */
-  private async get<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
+  public async get<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
     const cacheKey = this.getCacheKey('GET', url);
 
     // Check cache if enabled
@@ -447,7 +447,7 @@ export class AzureDevOpsApiClient {
   /**
    * Generic POST request
    */
-  private async post<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
+  public async post<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
     const config: AxiosRequestConfig = {
       timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
     };
@@ -459,7 +459,7 @@ export class AzureDevOpsApiClient {
   /**
    * Generic PUT request
    */
-  private async put<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
+  public async put<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
     const config: AxiosRequestConfig = {
       timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
     };
@@ -471,12 +471,24 @@ export class AzureDevOpsApiClient {
   /**
    * Generic PATCH request
    */
-  private async patch<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
+  public async patch<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
     const config: AxiosRequestConfig = {
       timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
     };
 
     const response = await this.axiosInstance.patch<T>(url, data, config);
+    return response.data;
+  }
+
+  /**
+   * Generic DELETE request
+   */
+  public async delete<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
+    const config: AxiosRequestConfig = {
+      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
+    };
+
+    const response = await this.axiosInstance.delete<T>(url, config);
     return response.data;
   }
 

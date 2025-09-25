@@ -70,6 +70,11 @@
         "command": "azureDevOps.openInBrowser",
         "title": "Open in Browser",
         "category": "Azure DevOps"
+      },
+      {
+        "command": "azureDevOps.openPullRequest",
+        "title": "Open Pull Request Details",
+        "category": "Azure DevOps"
       }
     ],
     "menus": {
@@ -78,6 +83,38 @@
           "command": "azureDevOps.refreshPullRequests",
           "when": "view == azureDevOpsPRs",
           "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "azureDevOps.openPullRequest",
+          "when": "view == azureDevOpsPRs && viewItem == pullRequest",
+          "group": "inline"
+        },
+        {
+          "command": "azureDevOps.approvePullRequest",
+          "when": "view == azureDevOpsPRs && viewItem == pullRequest",
+          "group": "inline"
+        },
+        {
+          "command": "azureDevOps.rejectPullRequest",
+          "when": "view == azureDevOpsPRs && viewItem == pullRequest",
+          "group": "inline"
+        },
+        {
+          "command": "azureDevOps.abandonPullRequest",
+          "when": "view == azureDevOpsPRs && viewItem == pullRequest",
+          "group": "inline"
+        },
+        {
+          "command": "azureDevOps.addComment",
+          "when": "view == azureDevOpsPRs && viewItem == pullRequest",
+          "group": "inline"
+        },
+        {
+          "command": "azureDevOps.openInBrowser",
+          "when": "view == azureDevOpsPRs && viewItem == pullRequest",
+          "group": "inline"
         }
       ]
     },

@@ -70,12 +70,12 @@ export interface CommentFilter {
  * Comment statistics
  */
 export interface CommentStatistics {
-  readonly totalThreads: number;
-  readonly totalComments: number;
-  readonly activeThreads: number;
-  readonly resolvedThreads: number;
-  readonly threadsByUser: Map<string, number>;
-  readonly commentsByUser: Map<string, number>;
+  totalThreads: number;
+  totalComments: number;
+  activeThreads: number;
+  resolvedThreads: number;
+  threadsByUser: Map<string, number>;
+  commentsByUser: Map<string, number>;
   readonly threadsByFile: Map<string, number>;
 }
 

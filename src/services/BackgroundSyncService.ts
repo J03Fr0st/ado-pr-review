@@ -26,18 +26,18 @@ export interface SyncConfiguration {
  * Sync status and statistics
  */
 export interface SyncStatus {
-  readonly enabled: boolean;
-  readonly lastSync?: Date;
-  readonly nextSync?: Date;
-  readonly isSyncing: boolean;
-  readonly syncErrors: string[];
-  readonly syncCounters: {
-    pullRequests: number;
-    comments: number;
-    conflicts: number;
-    retries: number;
+  enabled: boolean;
+  lastSync?: Date;
+  nextSync?: Date;
+  isSyncing: boolean;
+  syncErrors: string[];
+  syncCounters: {
+  pullRequests: number;
+  comments: number;
+  conflicts: number;
+  retries: number;
   };
-  readonly networkStatus: 'online' | 'offline' | 'unknown';
+  networkStatus: 'online' | 'offline' | 'unknown';
 }
 
 /**
@@ -72,12 +72,12 @@ export type SyncPriority = 'high' | 'normal' | 'low';
  * Sync task interface
  */
 export interface SyncTask {
-  readonly id: string;
-  readonly priority: SyncPriority;
-  readonly execute: () => Promise<void>;
-  readonly retryCount: number;
-  readonly maxRetries: number;
-  readonly lastAttempt?: Date;
+  id: string;
+  priority: SyncPriority;
+  execute: () => Promise<void>;
+  retryCount: number;
+  maxRetries: number;
+  lastAttempt?: Date;
 }
 
 /**
@@ -89,13 +89,13 @@ export type ConflictResolutionStrategy = 'server-wins' | 'client-wins' | 'manual
  * Conflict information
  */
 export interface SyncConflict {
-  readonly id: string;
-  readonly entityType: 'pullRequest' | 'comment';
-  readonly entityId: string;
-  readonly localVersion: any;
-  readonly serverVersion: any;
-  readonly timestamp: Date;
-  readonly resolution?: ConflictResolutionStrategy;
+  id: string;
+  entityType: 'pullRequest' | 'comment';
+  entityId: string;
+  localVersion: any;
+  serverVersion: any;
+  timestamp: Date;
+  resolution?: ConflictResolutionStrategy;
 }
 
 /**

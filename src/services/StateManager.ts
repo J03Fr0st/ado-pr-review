@@ -30,16 +30,16 @@ export interface StateUpdateEvent {
  * Application state interface
  */
 export interface AppState {
-  readonly pullRequests: Map<string, PullRequest>; // Key: `${repoId}_${prId}`
-  readonly repositories: Map<string, GitRepository>; // Key: repoId
-  readonly commentThreads: Map<string, CommentThread[]>; // Key: `${repoId}_${prId}`
-  readonly currentUser: Identity | null;
-  readonly selectedPullRequest: PullRequest | null;
-  readonly selectedRepository: GitRepository | null;
-  readonly loading: Map<string, boolean>; // Key: operation type
-  readonly errors: Map<string, string>; // Key: operation type
-  readonly lastUpdated: Map<string, Date>; // Key: data type
-  readonly viewState: ViewState;
+  pullRequests: Map<string, PullRequest>; // Key: `${repoId}_${prId}`
+  repositories: Map<string, GitRepository>; // Key: repoId
+  commentThreads: Map<string, CommentThread[]>; // Key: `${repoId}_${prId}`
+  currentUser: Identity | null;
+  selectedPullRequest: PullRequest | null;
+  selectedRepository: GitRepository | null;
+  loading: Map<string, boolean>; // Key: operation type
+  errors: Map<string, string>; // Key: operation type
+  lastUpdated: Map<string, Date>; // Key: data type
+  viewState: ViewState;
 }
 
 /**

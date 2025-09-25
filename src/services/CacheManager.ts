@@ -4,13 +4,13 @@ import * as vscode from 'vscode';
  * Cache entry with metadata
  */
 export interface CacheEntry<T> {
-  readonly data: T;
-  readonly timestamp: number;
-  readonly expiry: number;
-  readonly accessCount: number;
-  readonly lastAccess: number;
-  readonly etag?: string;
-  readonly metadata?: Record<string, any>;
+  data: T;
+  timestamp: number;
+  expiry: number;
+  accessCount: number;
+  lastAccess: number;
+  etag?: string;
+  metadata?: Record<string, any>;
 }
 
 /**
@@ -614,7 +614,7 @@ export class CacheManager {
 
     // Memory cache
     for (const [key, entry] of this.memoryCache.entries()) {
-      if (entry.metadata?.tags && tags.some(tag => entry.metadata.tags.includes(tag))) {
+      if (entry.metadata?.tags && tags.some(tag => (entry.metadata?.tags || []).includes(tag))) {
         this.memoryCache.delete(key);
       }
     }
@@ -625,7 +625,7 @@ export class CacheManager {
       .filter(key => key.startsWith('cache_'));
     for (const sessionKey of sessionKeys) {
       const entry = this.context.workspaceState.get<CacheEntry<any>>(sessionKey);
-      if (entry?.metadata?.tags && tags.some(tag => entry.metadata.tags.includes(tag))) {
+      if (entry?.metadata?.tags && tags.some(tag => (entry.metadata?.tags || []).includes(tag))) {
         await this.context.workspaceState.update(sessionKey, undefined);
       }
     }

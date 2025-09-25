@@ -1,0 +1,516 @@
+/**
+ * Accessibility features for Azure DevOps PR Reviewer webviews
+ */
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    :root {
+        --vscode-focusBorder: #fff !important;
+        --vscode-contrastActiveBorder: #fff !important;
+        --vscode-contrastBorder: #fff !important;
+    }
+
+    .card,
+    .modal-content {
+        border-width: 2px;
+    }
+
+    .btn {
+        border-width: 2px;
+    }
+
+    .nav-tab.active {
+        border-bottom-width: 3px;
+    }
+}
+
+/* Focus management */
+:focus {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+    outline: none;
+}
+
+:focus-visible {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+}
+
+/* Skip to main content link */
+.skip-to-content {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    padding: 8px;
+    text-decoration: none;
+    z-index: 100;
+}
+
+.skip-to-content:focus {
+    top: 0;
+}
+
+/* Keyboard navigation indicators */
+.keyboard-nav-indicator {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 5px 10px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.keyboard-nav-indicator.visible {
+    opacity: 1;
+}
+
+/* Screen reader only content */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* ARIA landmark regions */
+[role="banner"] {
+    position: relative;
+}
+
+[role="navigation"] {
+    position: relative;
+}
+
+[role="main"] {
+    position: relative;
+}
+
+[role="complementary"] {
+    position: relative;
+}
+
+[role="contentinfo"] {
+    position: relative;
+}
+
+/* Accessible table structure */
+.responsive-table caption {
+    caption-side: top;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    text-align: left;
+}
+
+.responsive-table th {
+    position: relative;
+}
+
+.responsive-table th::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--vscode-focusBorder);
+}
+
+/* Accessible form labels */
+.form-label::after {
+    content: ':';
+    color: var(--vscode-foreground);
+}
+
+.form-label.required::before {
+    content: '* ';
+    color: var(--vscode-errorForeground);
+    font-weight: bold;
+}
+
+.form-input[required],
+.form-textarea[required],
+.form-select[required] {
+    border-left: 3px solid var(--vscode-errorForeground);
+}
+
+/* Accessible button states */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn[aria-expanded="true"]::after {
+    content: ' ▲';
+}
+
+.btn[aria-expanded="false"]::after {
+    content: ' ▼';
+}
+
+.btn[aria-busy="true"] {
+    position: relative;
+    color: transparent;
+}
+
+.btn[aria-busy="true"]::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid var(--vscode-button-foreground);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Accessible error messages */
+.error-message {
+    color: var(--vscode-errorForeground);
+    font-size: 14px;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.error-message::before {
+    content: '⚠';
+    font-size: 16px;
+}
+
+.error-message[role="alert"] {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateY(-10px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* Accessible success messages */
+.success-message {
+    color: var(--vscode-testingIconPassedForeground);
+    font-size: 14px;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.success-message::before {
+    content: '✓';
+    font-size: 16px;
+}
+
+.success-message[role="status"] {
+    animation: slideIn 0.3s ease-out;
+}
+
+/* Accessible tooltips */
+.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+.tooltip .tooltip-text {
+    visibility: hidden;
+    width: 200px;
+    background-color: var(--vscode-panel-background);
+    color: var(--vscode-foreground);
+    text-align: center;
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 5px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%;
+    left: 50%;
+    margin-left: -100px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-size: 12px;
+}
+
+.tooltip:hover .tooltip-text,
+.tooltip:focus .tooltip-text,
+.tooltip:focus-within .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+}
+
+/* Accessible progress indicators */
+.progress-bar {
+    width: 100%;
+    height: 20px;
+    background-color: var(--vscode-panel-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background-color: var(--vscode-button-background);
+    transition: width 0.3s ease;
+}
+
+.progress-bar[aria-valuenow][aria-valuemax] {
+    position: relative;
+}
+
+.progress-bar::before {
+    content: attr(aria-label);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--vscode-button-foreground);
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Accessible tabs */
+.nav-tabs {
+    role: "tablist";
+}
+
+.nav-tab {
+    role: "tab";
+    aria-selected: "false";
+    aria-disabled: "false";
+}
+
+.nav-tab.active {
+    aria-selected: "true";
+}
+
+.nav-tab[aria-disabled="true"] {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.tab-panel {
+    role: "tabpanel";
+    aria-hidden: "true";
+}
+
+.tab-panel.active {
+    aria-hidden: "false";
+}
+
+/* Accessible modal dialogs */
+.modal {
+    role: "dialog";
+    aria-modal: "true";
+}
+
+.modal-content {
+    role: "document";
+}
+
+.modal-header {
+    border-bottom: 1px solid var(--vscode-panel-border);
+}
+
+.modal-title {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.modal[aria-hidden="true"] {
+    display: none;
+}
+
+.modal[aria-hidden="false"] {
+    display: flex;
+}
+
+/* Accessible alerts and notifications */
+.alert {
+    padding: 15px;
+    margin-bottom: 20px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    role: "alert";
+    animation: slideIn 0.3s ease-out;
+}
+
+.alert-info {
+    background-color: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    border-color: var(--vscode-badge-background);
+}
+
+.alert-success {
+    background-color: var(--vscode-testingIconPassedForeground);
+    color: var(--vscode-testingIconPassedBackground);
+    border-color: var(--vscode-testingIconPassedForeground);
+}
+
+.alert-warning {
+    background-color: var(--vscode-warningBackground);
+    color: var(--vscode-warningForeground);
+    border-color: var(--vscode-warningForeground);
+}
+
+.alert-error {
+    background-color: var(--vscode-errorForeground);
+    color: var(--vscode-errorBackground);
+    border-color: var(--vscode-errorForeground);
+}
+
+/* Accessible form validation */
+.form-input:invalid,
+.form-textarea:invalid,
+.form-select:invalid {
+    border-color: var(--vscode-errorForeground);
+}
+
+.form-input:invalid:focus,
+.form-textarea:invalid:focus,
+.form-select:invalid:focus {
+    outline-color: var(--vscode-errorForeground);
+}
+
+.validation-message {
+    color: var(--vscode-errorForeground);
+    font-size: 12px;
+    margin-top: 5px;
+    display: block;
+}
+
+/* Accessible focus traps */
+.focus-trap {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.focus-trap:focus {
+    outline: none;
+}
+
+/* Accessible color indicators */
+.color-indicator {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid var(--vscode-panel-border);
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.color-indicator::after {
+    content: attr(aria-label);
+    position: absolute;
+    left: -9999px;
+}
+
+/* Accessible keyboard shortcuts help */
+.keyboard-shortcuts {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    background: var(--vscode-panel-background);
+    border: 1px solid var(--vscode-panel-border);
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.keyboard-shortcuts kbd {
+    background: var(--vscode-badge-background);
+    color: var(--vscode-badge-foreground);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--vscode-panel-border);
+    font-family: monospace;
+    font-size: 11px;
+}
+
+/* Screen reader announcements */
+.announcements {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.announcements[role="status"],
+.announcements[role="alert"] {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .btn[aria-busy="true"]::before {
+        animation: none;
+        border-top-color: var(--vscode-button-foreground);
+    }
+
+    .error-message[role="alert"],
+    .success-message[role="status"],
+    .alert {
+        animation: none;
+    }
+}

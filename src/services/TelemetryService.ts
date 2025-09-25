@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { TelemetryReporter } from 'vscode-extension-telemetry';
+import TelemetryReporter from 'vscode-extension-telemetry';
 
 /**
  * Telemetry service for collecting usage analytics and error reporting
@@ -67,7 +67,7 @@ export class TelemetryService {
     try {
       // Check VS Code telemetry settings
       const telemetryConfig = vscode.workspace.getConfiguration('telemetry');
-      const vsCodeTelemetryEnabled = telemetryConfig.get<boolean>('telemetryLevel') !== 'off';
+      const vsCodeTelemetryEnabled = telemetryConfig.get<string>('telemetryLevel') !== 'off';
 
       // Check extension-specific setting
       const extensionConfig = vscode.workspace.getConfiguration('azureDevOps');
@@ -204,7 +204,7 @@ export class TelemetryService {
   /**
    * Track user configuration changes
    */
-  trackConfiguration(settingName: string, newValue: string, oldValue?: string): void {
+  trackConfiguration(settingName: string, newValue: string, oldValue?: string | undefined): void {
     // Only track if user has consented to configuration tracking
     if (!this.hasConsentForSensitiveData()) {
       return;
@@ -213,7 +213,7 @@ export class TelemetryService {
     this.trackEvent('configuration.changed', {
       settingName,
       newValue: this.anonymizeValue(settingName, newValue),
-      oldValue: oldValue ? this.anonymizeValue(settingName, oldValue) : undefined,
+      oldValue: oldValue ? this.anonymizeValue(settingName, oldValue) : '',
       hasValue: (!!newValue).toString()
     });
   }
@@ -261,7 +261,8 @@ export class TelemetryService {
     }
 
     // Check rate limits
-    if (!this.checkRateLimit(type)) {
+    const rateLimitType = type === 'error' ? 'errors' : 'events';
+    if (!this.checkRateLimit(rateLimitType)) {
       return false;
     }
 

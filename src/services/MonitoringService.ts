@@ -7,7 +7,7 @@ import { TelemetryService } from './TelemetryService';
 export class MonitoringService {
   private static instance: MonitoringService;
   private telemetry: TelemetryService;
-  private healthCheckInterval: NodeJS.Timer | undefined;
+  private healthCheckInterval: NodeJS.Timeout | undefined;
   private performanceMetrics: Map<string, PerformanceMetric> = new Map();
   private errorRates: Map<string, ErrorRate> = new Map();
   private isDisposed = false;
@@ -463,10 +463,10 @@ export class MonitoringService {
   private startPerformanceMonitoring(): void {
     // Monitor VS Code API calls
     const originalExecuteCommand = vscode.commands.executeCommand;
-    vscode.commands.executeCommand = async (command: string, ...rest: any[]) => {
+    vscode.commands.executeCommand = async <T>(command: string, ...rest: any[]): Promise<T> => {
       const start = Date.now();
       try {
-        const result = await originalExecuteCommand(command, ...rest);
+        const result = await originalExecuteCommand<T>(command, ...rest);
         this.trackPerformance('vscode.command', Date.now() - start, true);
         return result;
       } catch (error) {

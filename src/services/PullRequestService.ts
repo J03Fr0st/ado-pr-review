@@ -609,7 +609,7 @@ export class PullRequestService {
   /**
    * Vote on a pull request
    */
-  private async votePullRequest(
+  public async votePullRequest(
     repositoryId: string,
     pullRequestId: number,
     vote: PullRequestVote
