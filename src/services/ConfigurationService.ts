@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
 /**
  * Azure DevOps extension configuration interface
@@ -31,12 +31,16 @@ export interface ConfigValidationResult {
  * Configuration namespace: azureDevOps.*
  */
 export class ConfigurationService {
-  private static readonly SECTION = 'azureDevOps';
-  private readonly changeEmitter = new vscode.EventEmitter<AzureDevOpsConfiguration>();
+  private static readonly SECTION = "azureDevOps";
+  private readonly changeEmitter =
+    new vscode.EventEmitter<AzureDevOpsConfiguration>();
 
   constructor() {
     // Listen for configuration changes
-    vscode.workspace.onDidChangeConfiguration(this.onConfigurationChanged, this);
+    vscode.workspace.onDidChangeConfiguration(
+      this.onConfigurationChanged,
+      this
+    );
   }
 
   /**
@@ -50,16 +54,21 @@ export class ConfigurationService {
    * @returns Current configuration with all required properties
    */
   getConfiguration(): AzureDevOpsConfiguration {
-    const config = vscode.workspace.getConfiguration(ConfigurationService.SECTION);
+    const config = vscode.workspace.getConfiguration(
+      ConfigurationService.SECTION
+    );
 
     return {
-      organizationUrl: this.normalizeOrganizationUrl(config.get<string>('organizationUrl') || ''),
-      project: config.get<string>('project') || '',
-      refreshInterval: config.get<number>('refreshInterval') || 300,
+      organizationUrl: this.normalizeOrganizationUrl(
+        config.get<string>("organizationUrl") || ""
+      ),
+      project: config.get<string>("project") || "",
+      refreshInterval: config.get<number>("refreshInterval") || 300,
       telemetry: {
-        enabled: config.get<boolean>('telemetry.enabled') ?? true,
-        allowSensitiveData: config.get<boolean>('telemetry.allowSensitiveData') ?? false
-      }
+        enabled: config.get<boolean>("telemetry.enabled") ?? true,
+        allowSensitiveData:
+          config.get<boolean>("telemetry.allowSensitiveData") ?? false,
+      },
     };
   }
 
@@ -75,34 +84,42 @@ export class ConfigurationService {
 
     // Validate organization URL
     if (!config.organizationUrl) {
-      errors.push('Organization URL is required');
+      errors.push("Organization URL is required");
     } else if (!this.isValidOrganizationUrl(config.organizationUrl)) {
-      errors.push('Invalid organization URL format. Expected: https://dev.azure.com/myorg or https://myorg.visualstudio.com');
+      errors.push(
+        "Invalid organization URL format. Expected: https://dev.azure.com/myorg or https://myorg.visualstudio.com"
+      );
     }
 
     // Validate project
     if (!config.project) {
-      errors.push('Project name is required');
+      errors.push("Project name is required");
     } else if (!this.isValidProjectName(config.project)) {
-      errors.push('Invalid project name. Must be alphanumeric with spaces, hyphens, or underscores');
+      errors.push(
+        "Invalid project name. Must be alphanumeric with spaces, hyphens, or underscores"
+      );
     }
 
     // Validate refresh interval
     if (config.refreshInterval < 0) {
-      errors.push('Refresh interval cannot be negative');
+      errors.push("Refresh interval cannot be negative");
     } else if (config.refreshInterval > 0 && config.refreshInterval < 30) {
-      warnings.push('Refresh interval less than 30 seconds may impact performance');
+      warnings.push(
+        "Refresh interval less than 30 seconds may impact performance"
+      );
     }
 
     // Validate telemetry settings
     if (config.telemetry.allowSensitiveData && !config.telemetry.enabled) {
-      warnings.push('Sensitive data collection is enabled but telemetry is disabled');
+      warnings.push(
+        "Sensitive data collection is enabled but telemetry is disabled"
+      );
     }
 
     return {
       isValid: errors.length === 0,
       errors,
-      warnings
+      warnings,
     };
   }
 
@@ -119,7 +136,9 @@ export class ConfigurationService {
     value: T,
     target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global
   ): Promise<void> {
-    const config = vscode.workspace.getConfiguration(ConfigurationService.SECTION);
+    const config = vscode.workspace.getConfiguration(
+      ConfigurationService.SECTION
+    );
     await config.update(key, value, target);
   }
 
@@ -189,11 +208,12 @@ export class ConfigurationService {
     const validation = this.validateConfiguration();
 
     if (!validation.isValid) {
-      return `Configuration incomplete: ${validation.errors.join(', ')}`;
+      return `Configuration incomplete: ${validation.errors.join(", ")}`;
     }
 
     const orgName = this.extractOrganizationName(config.organizationUrl);
-    const refreshText = config.refreshInterval === 0 ? 'disabled' : `${config.refreshInterval}s`;
+    const refreshText =
+      config.refreshInterval === 0 ? "disabled" : `${config.refreshInterval}s`;
 
     return `${orgName}/${config.project} (refresh: ${refreshText})`;
   }
@@ -204,8 +224,16 @@ export class ConfigurationService {
    * @returns Promise that resolves when reset is complete
    */
   async resetConfiguration(): Promise<void> {
-    const config = vscode.workspace.getConfiguration(ConfigurationService.SECTION);
-    const keys = ['organizationUrl', 'project', 'refreshInterval', 'telemetry.enabled', 'telemetry.allowSensitiveData'];
+    const config = vscode.workspace.getConfiguration(
+      ConfigurationService.SECTION
+    );
+    const keys = [
+      "organizationUrl",
+      "project",
+      "refreshInterval",
+      "telemetry.enabled",
+      "telemetry.allowSensitiveData",
+    ];
 
     for (const key of keys) {
       await config.update(key, undefined, vscode.ConfigurationTarget.Global);
@@ -232,11 +260,11 @@ export class ConfigurationService {
    */
   private normalizeOrganizationUrl(url: string): string {
     if (!url) {
-      return '';
+      return "";
     }
 
     // Remove trailing slash
-    url = url.replace(/\/$/, '');
+    url = url.replace(/\/$/, "");
 
     // Convert visualstudio.com format to dev.azure.com
     const vsMatch = url.match(/^https:\/\/([^\.]+)\.visualstudio\.com$/);
@@ -265,7 +293,9 @@ export class ConfigurationService {
     }
 
     // Check for dev.azure.com or visualstudio.com formats
-    return /^https:\/\/(dev\.azure\.com\/[^\/]+|[^\.\/]+\.visualstudio\.com)$/.test(url);
+    return /^https:\/\/(dev\.azure\.com\/[^\/]+|[^\.\/]+\.visualstudio\.com)$/.test(
+      url
+    );
   }
 
   /**
@@ -291,8 +321,10 @@ export class ConfigurationService {
    * @returns Organization name or full URL if extraction fails
    */
   private extractOrganizationName(url: string): string {
-    const match = url.match(/dev\.azure\.com\/([^\/]+)|([^\.]+)\.visualstudio\.com/);
-    return match ? (match[1] || match[2]) : url;
+    const match = url.match(
+      /dev\.azure\.com\/([^\/]+)|([^\.]+)\.visualstudio\.com/
+    );
+    return match ? match[1] || match[2] : url;
   }
 
   /**

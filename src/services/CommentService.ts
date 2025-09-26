@@ -1,6 +1,6 @@
-import * as vscode from 'vscode';
-import { AzureDevOpsApiClient } from '../api/AzureDevOpsApiClient';
-import { ConfigurationService } from './ConfigurationService';
+import * as vscode from "vscode";
+import { AzureDevOpsApiClient } from "../api/AzureDevOpsApiClient";
+import { ConfigurationService } from "./ConfigurationService";
 import {
   CommentThread,
   Comment,
@@ -8,8 +8,8 @@ import {
   CommentType,
   CommentThreadContext,
   CommentPosition,
-  Identity
-} from '../api/models';
+  Identity,
+} from "../api/models";
 
 /**
  * Comment creation options
@@ -95,8 +95,10 @@ export interface CommentStatistics {
  * - Real-time comment updates
  */
 export class CommentService {
-  private readonly cacheKeyPrefix = 'comment_service_';
-  private readonly commentUpdateListeners = new Set<(event: CommentUpdateEvent) => void>();
+  private readonly cacheKeyPrefix = "comment_service_";
+  private readonly commentUpdateListeners = new Set<
+    (event: CommentUpdateEvent) => void
+  >();
   private readonly refreshIntervals = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -118,11 +120,17 @@ export class CommentService {
     pullRequestId: number,
     filter: CommentFilter = {}
   ): Promise<CommentThread[]> {
-    const cacheKey = this.getCacheKey('threads', repositoryId, pullRequestId, filter);
+    const cacheKey = this.getCacheKey(
+      "threads",
+      repositoryId,
+      pullRequestId,
+      filter
+    );
 
     // Check cache first
     const cached = this.getCachedData<CommentThread[]>(cacheKey);
-    if (cached && this.isCacheValid(cached.timestamp, 30000)) { // 30 second cache
+    if (cached && this.isCacheValid(cached.timestamp, 30000)) {
+      // 30 second cache
       return this.applyCommentFilters(cached.data, filter);
     }
 
@@ -138,7 +146,10 @@ export class CommentService {
 
       return this.applyCommentFilters(threads, filter);
     } catch (error) {
-      console.error(`Failed to fetch comment threads for PR ${pullRequestId}:`, error);
+      console.error(
+        `Failed to fetch comment threads for PR ${pullRequestId}:`,
+        error
+      );
       return [];
     }
   }
@@ -157,7 +168,7 @@ export class CommentService {
     threadId: number
   ): Promise<CommentThread | null> {
     const threads = await this.getCommentThreads(repositoryId, pullRequestId);
-    return threads.find(thread => thread.id === threadId) || null;
+    return threads.find((thread) => thread.id === threadId) || null;
   }
 
   /**
@@ -178,31 +189,41 @@ export class CommentService {
       const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${repositoryId}/pullrequests/${pullRequestId}/threads`;
 
       const payload: any = {
-        comments: [{
-          content: options.content,
-          commentType: options.commentType || 'text'
-        }],
-        status: options.status || 'active'
+        comments: [
+          {
+            content: options.content,
+            commentType: options.commentType || "text",
+          },
+        ],
+        status: options.status || "active",
       };
 
       // Add thread context if file positioning is specified
       if (options.filePath && options.line !== undefined) {
         payload.threadContext = {
-          filePath: options.filePath
+          filePath: options.filePath,
         };
 
         // Add pull request specific context
         payload.pullRequestThreadContext = {
-          iterationContext: options.iterationId ? {
-            firstComparingIteration: 1,
-            secondComparingIteration: options.iterationId
-          } : undefined
+          iterationContext: options.iterationId
+            ? {
+                firstComparingIteration: 1,
+                secondComparingIteration: options.iterationId,
+              }
+            : undefined,
         };
 
         // Add file positioning
         if (options.line !== undefined) {
-          payload.threadContext.rightFileStart = { line: options.line, offset: 0 };
-          payload.threadContext.rightFileEnd = { line: options.line, offset: 0 };
+          payload.threadContext.rightFileStart = {
+            line: options.line,
+            offset: 0,
+          };
+          payload.threadContext.rightFileEnd = {
+            line: options.line,
+            offset: 0,
+          };
         }
       }
 
@@ -213,16 +234,16 @@ export class CommentService {
 
       // Notify listeners
       this.notifyCommentUpdate({
-        type: 'threadCreated',
+        type: "threadCreated",
         repositoryId,
         pullRequestId,
         threadId: thread.id,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       return thread;
     } catch (error) {
-      console.error('Failed to create comment thread:', error);
+      console.error("Failed to create comment thread:", error);
       return null;
     }
   }
@@ -254,22 +275,26 @@ export class CommentService {
 
         // Notify listeners
         this.notifyCommentUpdate({
-          type: 'commentAdded',
+          type: "commentAdded",
           repositoryId,
           pullRequestId,
           threadId: options.threadId,
           commentId: comment.id,
-          timestamp: new Date()
+          timestamp: new Date(),
         });
       } else {
         // Create new thread
-        const thread = await this.createCommentThread(repositoryId, pullRequestId, {
-          content: options.content,
-          filePath: options.filePath,
-          line: options.line,
-          iterationId: options.iterationId,
-          commentType: options.commentType
-        });
+        const thread = await this.createCommentThread(
+          repositoryId,
+          pullRequestId,
+          {
+            content: options.content,
+            filePath: options.filePath,
+            line: options.line,
+            iterationId: options.iterationId,
+            commentType: options.commentType,
+          }
+        );
 
         if (!thread || thread.comments.length === 0) {
           return null;
@@ -283,7 +308,7 @@ export class CommentService {
 
       return comment;
     } catch (error) {
-      console.error('Failed to add comment:', error);
+      console.error("Failed to add comment:", error);
       return null;
     }
   }
@@ -311,7 +336,8 @@ export class CommentService {
 
       const payload: any = {};
       if (options.content !== undefined) payload.content = options.content;
-      if (options.commentType !== undefined) payload.commentType = options.commentType;
+      if (options.commentType !== undefined)
+        payload.commentType = options.commentType;
 
       const comment = await this.apiClient.patch<Comment>(url, payload);
 
@@ -320,17 +346,17 @@ export class CommentService {
 
       // Notify listeners
       this.notifyCommentUpdate({
-        type: 'commentUpdated',
+        type: "commentUpdated",
         repositoryId,
         pullRequestId,
         threadId,
         commentId,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       return comment;
     } catch (error) {
-      console.error('Failed to update comment:', error);
+      console.error("Failed to update comment:", error);
       return null;
     }
   }
@@ -360,12 +386,18 @@ export class CommentService {
       // Update thread context if file positioning changed
       if (options.filePath || options.line !== undefined) {
         payload.threadContext = {
-          filePath: options.filePath
+          filePath: options.filePath,
         };
 
         if (options.line !== undefined) {
-          payload.threadContext.rightFileStart = { line: options.line, offset: 0 };
-          payload.threadContext.rightFileEnd = { line: options.line, offset: 0 };
+          payload.threadContext.rightFileStart = {
+            line: options.line,
+            offset: 0,
+          };
+          payload.threadContext.rightFileEnd = {
+            line: options.line,
+            offset: 0,
+          };
         }
       }
 
@@ -376,16 +408,16 @@ export class CommentService {
 
       // Notify listeners
       this.notifyCommentUpdate({
-        type: 'threadUpdated',
+        type: "threadUpdated",
         repositoryId,
         pullRequestId,
         threadId,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       return thread;
     } catch (error) {
-      console.error('Failed to update comment thread:', error);
+      console.error("Failed to update comment thread:", error);
       return null;
     }
   }
@@ -416,17 +448,17 @@ export class CommentService {
 
       // Notify listeners
       this.notifyCommentUpdate({
-        type: 'commentDeleted',
+        type: "commentDeleted",
         repositoryId,
         pullRequestId,
         threadId,
         commentId,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       return true;
     } catch (error) {
-      console.error('Failed to delete comment:', error);
+      console.error("Failed to delete comment:", error);
       return false;
     }
   }
@@ -443,7 +475,7 @@ export class CommentService {
     pullRequestId: number
   ): Promise<CommentStatistics> {
     const threads = await this.getCommentThreads(repositoryId, pullRequestId, {
-      includeDeleted: false
+      includeDeleted: false,
     });
 
     const stats: CommentStatistics = {
@@ -453,16 +485,16 @@ export class CommentService {
       resolvedThreads: 0,
       threadsByUser: new Map(),
       commentsByUser: new Map(),
-      threadsByFile: new Map()
+      threadsByFile: new Map(),
     };
 
     for (const thread of threads) {
       stats.totalComments += thread.comments.length;
 
       // Count threads by status
-      if (thread.status === 'active') {
+      if (thread.status === "active") {
         stats.activeThreads++;
-      } else if (thread.status === 'closed' || thread.status === 'fixed') {
+      } else if (thread.status === "closed" || thread.status === "fixed") {
         stats.resolvedThreads++;
       }
 
@@ -504,7 +536,7 @@ export class CommentService {
     query: string
   ): Promise<Array<{ comment: Comment; thread: CommentThread }>> {
     const threads = await this.getCommentThreads(repositoryId, pullRequestId, {
-      includeDeleted: false
+      includeDeleted: false,
     });
 
     const results: Array<{ comment: Comment; thread: CommentThread }> = [];
@@ -539,7 +571,11 @@ export class CommentService {
     intervalMs: number,
     callback: (threads: CommentThread[]) => void
   ): void {
-    const cacheKey = this.getCacheKey('autorefresh', repositoryId, pullRequestId);
+    const cacheKey = this.getCacheKey(
+      "autorefresh",
+      repositoryId,
+      pullRequestId
+    );
 
     // Clear existing interval
     const existingInterval = this.refreshIntervals.get(cacheKey);
@@ -550,10 +586,13 @@ export class CommentService {
     // Set up new interval
     const interval = setInterval(async () => {
       try {
-        const threads = await this.getCommentThreads(repositoryId, pullRequestId);
+        const threads = await this.getCommentThreads(
+          repositoryId,
+          pullRequestId
+        );
         callback(threads);
       } catch (error) {
-        console.error('Comment auto-refresh failed:', error);
+        console.error("Comment auto-refresh failed:", error);
       }
     }, intervalMs);
 
@@ -567,7 +606,11 @@ export class CommentService {
    * @param pullRequestId Pull request ID
    */
   clearAutoRefresh(repositoryId: string, pullRequestId: number): void {
-    const cacheKey = this.getCacheKey('autorefresh', repositoryId, pullRequestId);
+    const cacheKey = this.getCacheKey(
+      "autorefresh",
+      repositoryId,
+      pullRequestId
+    );
     const interval = this.refreshIntervals.get(cacheKey);
 
     if (interval) {
@@ -581,7 +624,9 @@ export class CommentService {
    *
    * @param listener Update event listener
    */
-  addCommentUpdateListener(listener: (event: CommentUpdateEvent) => void): void {
+  addCommentUpdateListener(
+    listener: (event: CommentUpdateEvent) => void
+  ): void {
     this.commentUpdateListeners.add(listener);
   }
 
@@ -590,7 +635,9 @@ export class CommentService {
    *
    * @param listener Update event listener
    */
-  removeCommentUpdateListener(listener: (event: CommentUpdateEvent) => void): void {
+  removeCommentUpdateListener(
+    listener: (event: CommentUpdateEvent) => void
+  ): void {
     this.commentUpdateListeners.delete(listener);
   }
 
@@ -611,45 +658,51 @@ export class CommentService {
   /**
    * Apply filters to comment threads
    */
-  private applyCommentFilters(threads: CommentThread[], filter: CommentFilter): CommentThread[] {
+  private applyCommentFilters(
+    threads: CommentThread[],
+    filter: CommentFilter
+  ): CommentThread[] {
     let filtered = [...threads];
 
     if (!filter.includeDeleted) {
-      filtered = filtered.filter(thread => !thread.isDeleted);
+      filtered = filtered.filter((thread) => !thread.isDeleted);
     }
 
     if (filter.threadId) {
-      filtered = filtered.filter(thread => thread.id === filter.threadId);
+      filtered = filtered.filter((thread) => thread.id === filter.threadId);
     }
 
     if (filter.authorId) {
-      filtered = filtered.filter(thread =>
-        thread.comments.some(comment => comment.author.id === filter.authorId)
+      filtered = filtered.filter((thread) =>
+        thread.comments.some((comment) => comment.author.id === filter.authorId)
       );
     }
 
     if (filter.status) {
-      filtered = filtered.filter(thread => thread.status === filter.status);
+      filtered = filtered.filter((thread) => thread.status === filter.status);
     }
 
     if (filter.filePath) {
-      filtered = filtered.filter(thread =>
-        thread.threadContext?.filePath === filter.filePath
+      filtered = filtered.filter(
+        (thread) => thread.threadContext?.filePath === filter.filePath
       );
     }
 
     if (filter.commentType) {
-      filtered = filtered.filter(thread =>
-        thread.comments.some(comment => comment.commentType === filter.commentType)
+      filtered = filtered.filter((thread) =>
+        thread.comments.some(
+          (comment) => comment.commentType === filter.commentType
+        )
       );
     }
 
     if (filter.searchQuery) {
       const query = filter.searchQuery.toLowerCase();
-      filtered = filtered.filter(thread =>
-        thread.comments.some(comment =>
-          comment.content.toLowerCase().includes(query) ||
-          comment.author.displayName.toLowerCase().includes(query)
+      filtered = filtered.filter((thread) =>
+        thread.comments.some(
+          (comment) =>
+            comment.content.toLowerCase().includes(query) ||
+            comment.author.displayName.toLowerCase().includes(query)
         )
       );
     }
@@ -665,7 +718,7 @@ export class CommentService {
       try {
         listener(event);
       } catch (error) {
-        console.error('Error in comment update listener:', error);
+        console.error("Error in comment update listener:", error);
       }
     }
   }
@@ -674,14 +727,17 @@ export class CommentService {
    * Get cache key for data
    */
   private getCacheKey(...parts: any[]): string {
-    return `${this.cacheKeyPrefix}${parts.join('_')}`;
+    return `${this.cacheKeyPrefix}${parts.join("_")}`;
   }
 
   /**
    * Get cached data with metadata
    */
   private getCachedData<T>(key: string): { data: T; timestamp: number } | null {
-    const cached = this.context.workspaceState.get<{ data: T; timestamp: number }>(key);
+    const cached = this.context.workspaceState.get<{
+      data: T;
+      timestamp: number;
+    }>(key);
     return cached || null;
   }
 
@@ -691,7 +747,7 @@ export class CommentService {
   private setCacheData<T>(key: string, data: T): void {
     this.context.workspaceState.update(key, {
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -705,11 +761,16 @@ export class CommentService {
   /**
    * Invalidate comment cache
    */
-  private invalidateCommentCache(repositoryId: string, pullRequestId: number): void {
-    const keys = this.context.workspaceState.keys().filter(key =>
-      key.includes(`threads_${repositoryId}_${pullRequestId}`)
-    );
-    keys.forEach(key => this.context.workspaceState.update(key, undefined));
+  private invalidateCommentCache(
+    repositoryId: string,
+    pullRequestId: number
+  ): void {
+    const keys = this.context.workspaceState
+      .keys()
+      .filter((key) =>
+        key.includes(`threads_${repositoryId}_${pullRequestId}`)
+      );
+    keys.forEach((key) => this.context.workspaceState.update(key, undefined));
   }
 }
 
@@ -717,11 +778,11 @@ export class CommentService {
  * Comment update event type
  */
 export type CommentUpdateEventType =
-  | 'threadCreated'
-  | 'threadUpdated'
-  | 'commentAdded'
-  | 'commentUpdated'
-  | 'commentDeleted';
+  | "threadCreated"
+  | "threadUpdated"
+  | "commentAdded"
+  | "commentUpdated"
+  | "commentDeleted";
 
 /**
  * Comment update event

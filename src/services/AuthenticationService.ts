@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
 /**
  * Azure DevOps Personal Access Token configuration interface
@@ -35,8 +35,8 @@ export interface AuthValidationResult {
  * - Error handling without sensitive data exposure
  */
 export class AuthenticationService {
-  private static readonly PAT_KEY = 'azure-devops-pat';
-  private static readonly CONFIG_KEY = 'azure-devops-config';
+  private static readonly PAT_KEY = "azure-devops-pat";
+  private static readonly CONFIG_KEY = "azure-devops-config";
   private static readonly VALIDATION_TIMEOUT = 10000; // 10 seconds
 
   constructor(
@@ -54,13 +54,23 @@ export class AuthenticationService {
   async storePat(config: PatConfiguration): Promise<void> {
     try {
       // Validate PAT before storing
-      const validationResult = await this.validatePatWithApi(config.token, config.organizationUrl);
+      const validationResult = await this.validatePatWithApi(
+        config.token,
+        config.organizationUrl
+      );
       if (!validationResult.isValid) {
-        throw new Error(`PAT validation failed: ${validationResult.errorMessage || 'Invalid token'}`);
+        throw new Error(
+          `PAT validation failed: ${
+            validationResult.errorMessage || "Invalid token"
+          }`
+        );
       }
 
       // Store token in secure storage
-      await this.secretStorage.store(AuthenticationService.PAT_KEY, config.token);
+      await this.secretStorage.store(
+        AuthenticationService.PAT_KEY,
+        config.token
+      );
 
       // Store non-sensitive configuration
       const configData = {
@@ -69,17 +79,26 @@ export class AuthenticationService {
         expiresAt: config.expiresAt?.toISOString(),
         userName: validationResult.userName,
         organizationName: validationResult.organizationName,
-        permissions: validationResult.permissions
+        permissions: validationResult.permissions,
       };
 
-      await this.context.globalState.update(AuthenticationService.CONFIG_KEY, configData);
+      await this.context.globalState.update(
+        AuthenticationService.CONFIG_KEY,
+        configData
+      );
 
       // Set context for extension activation
-      await vscode.commands.executeCommand('setContext', 'azureDevOps:configured', true);
-
+      await vscode.commands.executeCommand(
+        "setContext",
+        "azureDevOps:configured",
+        true
+      );
     } catch (error) {
       // Ensure no PAT leaks in error messages
-      const safeError = error instanceof Error ? error.message.replace(config.token, '[REDACTED]') : 'PAT storage failed';
+      const safeError =
+        error instanceof Error
+          ? error.message.replace(config.token, "[REDACTED]")
+          : "PAT storage failed";
       throw new Error(safeError);
     }
   }
@@ -92,7 +111,9 @@ export class AuthenticationService {
   async getPatConfiguration(): Promise<PatConfiguration | null> {
     try {
       const token = await this.secretStorage.get(AuthenticationService.PAT_KEY);
-      const configData = this.context.globalState.get<any>(AuthenticationService.CONFIG_KEY);
+      const configData = this.context.globalState.get<any>(
+        AuthenticationService.CONFIG_KEY
+      );
 
       if (!token || !configData) {
         return null;
@@ -102,7 +123,9 @@ export class AuthenticationService {
         token,
         organizationUrl: configData.organizationUrl,
         project: configData.project,
-        expiresAt: configData.expiresAt ? new Date(configData.expiresAt) : undefined
+        expiresAt: configData.expiresAt
+          ? new Date(configData.expiresAt)
+          : undefined,
       };
     } catch (error) {
       return null;
@@ -121,7 +144,7 @@ export class AuthenticationService {
     }
 
     // Basic auth with PAT (username can be empty for PAT)
-    const credentials = Buffer.from(`:${config.token}`).toString('base64');
+    const credentials = Buffer.from(`:${config.token}`).toString("base64");
     return `Basic ${credentials}`;
   }
 
@@ -135,8 +158,8 @@ export class AuthenticationService {
     if (!config) {
       return {
         isValid: false,
-        errorMessage: 'No PAT configured',
-        errorCode: 'NO_PAT'
+        errorMessage: "No PAT configured",
+        errorCode: "NO_PAT",
       };
     }
 
@@ -151,10 +174,17 @@ export class AuthenticationService {
   async clearPat(): Promise<void> {
     try {
       await this.secretStorage.delete(AuthenticationService.PAT_KEY);
-      await this.context.globalState.update(AuthenticationService.CONFIG_KEY, undefined);
-      await vscode.commands.executeCommand('setContext', 'azureDevOps:configured', false);
+      await this.context.globalState.update(
+        AuthenticationService.CONFIG_KEY,
+        undefined
+      );
+      await vscode.commands.executeCommand(
+        "setContext",
+        "azureDevOps:configured",
+        false
+      );
     } catch (error) {
-      throw new Error('Failed to clear PAT configuration');
+      throw new Error("Failed to clear PAT configuration");
     }
   }
 
@@ -175,26 +205,36 @@ export class AuthenticationService {
    * @param organizationUrl Azure DevOps organization URL
    * @returns Promise resolving to validation result
    */
-  private async validatePatWithApi(token: string, organizationUrl: string): Promise<AuthValidationResult> {
+  private async validatePatWithApi(
+    token: string,
+    organizationUrl: string
+  ): Promise<AuthValidationResult> {
     try {
       // Create timeout promise
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Validation timeout')), AuthenticationService.VALIDATION_TIMEOUT)
+        setTimeout(
+          () => reject(new Error("Validation timeout")),
+          AuthenticationService.VALIDATION_TIMEOUT
+        )
       );
 
       // Import axios dynamically to avoid loading issues
-      const axios = await import('axios');
+      const axios = await import("axios");
 
-      const validationPromise = this.performPatValidation(axios.default, token, organizationUrl);
+      const validationPromise = this.performPatValidation(
+        axios.default,
+        token,
+        organizationUrl
+      );
 
       // Race between validation and timeout
       return await Promise.race([validationPromise, timeoutPromise]);
-
     } catch (error) {
       return {
         isValid: false,
-        errorMessage: error instanceof Error ? error.message : 'Validation failed',
-        errorCode: 'VALIDATION_ERROR'
+        errorMessage:
+          error instanceof Error ? error.message : "Validation failed",
+        errorCode: "VALIDATION_ERROR",
       };
     }
   }
@@ -213,15 +253,15 @@ export class AuthenticationService {
     organizationUrl: string
   ): Promise<AuthValidationResult> {
     try {
-      const credentials = Buffer.from(`:${token}`).toString('base64');
+      const credentials = Buffer.from(`:${token}`).toString("base64");
       const response = await axios.get(
         `${organizationUrl}/_apis/profile/profiles/me?api-version=7.1-preview.3`,
         {
           headers: {
-            'Authorization': `Basic ${credentials}`,
-            'Accept': 'application/json'
+            Authorization: `Basic ${credentials}`,
+            Accept: "application/json",
           },
-          timeout: AuthenticationService.VALIDATION_TIMEOUT
+          timeout: AuthenticationService.VALIDATION_TIMEOUT,
         }
       );
 
@@ -229,23 +269,26 @@ export class AuthenticationService {
         const profile = response.data;
 
         // Get organization info from URL
-        const orgMatch = organizationUrl.match(/dev\.azure\.com\/([^\/]+)|([^\.]+)\.visualstudio\.com/);
-        const organizationName = orgMatch ? (orgMatch[1] || orgMatch[2]) : 'Unknown';
+        const orgMatch = organizationUrl.match(
+          /dev\.azure\.com\/([^\/]+)|([^\.]+)\.visualstudio\.com/
+        );
+        const organizationName = orgMatch
+          ? orgMatch[1] || orgMatch[2]
+          : "Unknown";
 
         return {
           isValid: true,
           userName: profile.displayName || profile.emailAddress,
           organizationName,
-          permissions: ['read', 'write'] // Basic permissions assumption
+          permissions: ["read", "write"], // Basic permissions assumption
         };
       }
 
       return {
         isValid: false,
-        errorMessage: 'Invalid API response',
-        errorCode: 'INVALID_RESPONSE'
+        errorMessage: "Invalid API response",
+        errorCode: "INVALID_RESPONSE",
       };
-
     } catch (error: any) {
       // Handle axios error responses without exposing sensitive data
       if (error.response) {
@@ -253,22 +296,22 @@ export class AuthenticationService {
         if (status === 401 || status === 403) {
           return {
             isValid: false,
-            errorMessage: 'Invalid or expired Personal Access Token',
-            errorCode: 'INVALID_TOKEN'
+            errorMessage: "Invalid or expired Personal Access Token",
+            errorCode: "INVALID_TOKEN",
           };
         } else if (status === 404) {
           return {
             isValid: false,
-            errorMessage: 'Organization not found or inaccessible',
-            errorCode: 'ORG_NOT_FOUND'
+            errorMessage: "Organization not found or inaccessible",
+            errorCode: "ORG_NOT_FOUND",
           };
         }
       }
 
       return {
         isValid: false,
-        errorMessage: 'Network error or service unavailable',
-        errorCode: 'NETWORK_ERROR'
+        errorMessage: "Network error or service unavailable",
+        errorCode: "NETWORK_ERROR",
       };
     }
   }

@@ -1,26 +1,26 @@
-import * as vscode from 'vscode';
-import { TelemetryService } from '../services/TelemetryService';
+import * as vscode from "vscode";
+import { TelemetryService } from "../services/TelemetryService";
 
 /**
  * Error severity levels for categorization and handling
  */
 export enum ErrorSeverity {
-  LOW = 'low',
-  MEDIUM = 'medium',
-  HIGH = 'high',
-  CRITICAL = 'critical'
+  LOW = "low",
+  MEDIUM = "medium",
+  HIGH = "high",
+  CRITICAL = "critical",
 }
 
 /**
  * Error categories for better classification
  */
 export enum ErrorCategory {
-  AUTHENTICATION = 'authentication',
-  NETWORK = 'network',
-  CONFIGURATION = 'configuration',
-  API = 'api',
-  UI = 'ui',
-  INTERNAL = 'internal'
+  AUTHENTICATION = "authentication",
+  NETWORK = "network",
+  CONFIGURATION = "configuration",
+  API = "api",
+  UI = "ui",
+  INTERNAL = "internal",
 }
 
 /**
@@ -62,9 +62,7 @@ export class ErrorHandler {
   private readonly errors: ErrorInfo[] = [];
   private readonly maxErrorHistory = 100;
 
-  private constructor(
-    private readonly telemetryService?: TelemetryService
-  ) {}
+  private constructor(private readonly telemetryService?: TelemetryService) {}
 
   /**
    * Get singleton instance of ErrorHandler
@@ -137,7 +135,7 @@ export class ErrorHandler {
         showToUser: true,
         logToTelemetry: true,
         includeContext: false, // Never include context for auth errors
-        userActionRequired: true
+        userActionRequired: true,
       },
       sanitizedContext
     );
@@ -164,7 +162,7 @@ export class ErrorHandler {
         showToUser: true,
         logToTelemetry: true,
         includeContext: true,
-        userActionRequired: false
+        userActionRequired: false,
       },
       sanitizedContext
     );
@@ -189,7 +187,7 @@ export class ErrorHandler {
         showToUser: true,
         logToTelemetry: true,
         includeContext: true,
-        userActionRequired: true
+        userActionRequired: true,
       },
       context
     );
@@ -206,12 +204,10 @@ export class ErrorHandler {
     let errors = this.errors;
 
     if (category) {
-      errors = errors.filter(e => e.category === category);
+      errors = errors.filter((e) => e.category === category);
     }
 
-    return errors
-      .slice(-limit)
-      .reverse(); // Most recent first
+    return errors.slice(-limit).reverse(); // Most recent first
   }
 
   /**
@@ -257,8 +253,8 @@ export class ErrorHandler {
     severity: ErrorSeverity,
     context?: Record<string, any>
   ): ErrorInfo {
-    const message = typeof error === 'string' ? error : error.message;
-    const originalError = typeof error === 'string' ? undefined : error;
+    const message = typeof error === "string" ? error : error.message;
+    const originalError = typeof error === "string" ? undefined : error;
 
     // Generate error code based on category and message
     const code = this.generateErrorCode(category, message);
@@ -274,7 +270,7 @@ export class ErrorHandler {
       context: this.sanitizeContext(context),
       originalError,
       userAction,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
   }
 
@@ -298,7 +294,10 @@ export class ErrorHandler {
    * @param errorInfo Error information
    * @param includeContext Whether to include context data
    */
-  private async logToTelemetry(errorInfo: ErrorInfo, includeContext = false): Promise<void> {
+  private async logToTelemetry(
+    errorInfo: ErrorInfo,
+    includeContext = false
+  ): Promise<void> {
     if (!this.telemetryService) {
       return;
     }
@@ -307,7 +306,7 @@ export class ErrorHandler {
       errorCode: errorInfo.code,
       category: errorInfo.category,
       severity: errorInfo.severity,
-      message: errorInfo.message
+      message: errorInfo.message,
     };
 
     if (includeContext && errorInfo.context) {
@@ -315,10 +314,10 @@ export class ErrorHandler {
     }
 
     try {
-      this.telemetryService.trackEvent('error', telemetryData);
+      this.telemetryService.trackEvent("error", telemetryData);
     } catch (telemetryError) {
       // Don't fail the original error handling if telemetry fails
-      console.warn('Failed to log error to telemetry:', telemetryError);
+      console.warn("Failed to log error to telemetry:", telemetryError);
     }
   }
 
@@ -328,7 +327,10 @@ export class ErrorHandler {
    * @param errorInfo Error information
    * @param actionRequired Whether user action is required
    */
-  private async showToUser(errorInfo: ErrorInfo, actionRequired = false): Promise<void> {
+  private async showToUser(
+    errorInfo: ErrorInfo,
+    actionRequired = false
+  ): Promise<void> {
     const message = errorInfo.userAction
       ? `${errorInfo.message}\n\n${errorInfo.userAction}`
       : errorInfo.message;
@@ -339,8 +341,8 @@ export class ErrorHandler {
         if (actionRequired) {
           const action = await vscode.window.showErrorMessage(
             message,
-            'Open Settings',
-            'Report Issue'
+            "Open Settings",
+            "Report Issue"
           );
           await this.handleUserAction(action, errorInfo);
         } else {
@@ -364,18 +366,24 @@ export class ErrorHandler {
    * @param action User selected action
    * @param errorInfo Error information context
    */
-  private async handleUserAction(action: string | undefined, errorInfo: ErrorInfo): Promise<void> {
+  private async handleUserAction(
+    action: string | undefined,
+    errorInfo: ErrorInfo
+  ): Promise<void> {
     switch (action) {
-      case 'Open Settings':
+      case "Open Settings":
         if (errorInfo.category === ErrorCategory.CONFIGURATION) {
-          vscode.commands.executeCommand('workbench.action.openSettings', 'azureDevOps');
+          vscode.commands.executeCommand(
+            "workbench.action.openSettings",
+            "azureDevOps"
+          );
         } else {
-          vscode.commands.executeCommand('azureDevOps.configure');
+          vscode.commands.executeCommand("azureDevOps.configure");
         }
         break;
 
-      case 'Report Issue':
-        const issueUrl = 'https://github.com/company/ado-pr-review/issues/new';
+      case "Report Issue":
+        const issueUrl = "https://github.com/company/ado-pr-review/issues/new";
         vscode.env.openExternal(vscode.Uri.parse(issueUrl));
         break;
     }
@@ -387,16 +395,24 @@ export class ErrorHandler {
    * @param errorInfo Error information
    */
   private logToOutput(errorInfo: ErrorInfo): void {
-    const outputChannel = vscode.window.createOutputChannel('Azure DevOps PR Reviewer');
+    const outputChannel = vscode.window.createOutputChannel(
+      "Azure DevOps PR Reviewer"
+    );
 
     const logMessage = [
-      `[${errorInfo.timestamp.toISOString()}] ${errorInfo.severity.toUpperCase()}: ${errorInfo.category}`,
+      `[${errorInfo.timestamp.toISOString()}] ${errorInfo.severity.toUpperCase()}: ${
+        errorInfo.category
+      }`,
       `Code: ${errorInfo.code}`,
       `Message: ${errorInfo.message}`,
-      errorInfo.context ? `Context: ${JSON.stringify(errorInfo.context, null, 2)}` : '',
-      errorInfo.originalError ? `Stack: ${errorInfo.originalError.stack}` : '',
-      '---'
-    ].filter(Boolean).join('\n');
+      errorInfo.context
+        ? `Context: ${JSON.stringify(errorInfo.context, null, 2)}`
+        : "",
+      errorInfo.originalError ? `Stack: ${errorInfo.originalError.stack}` : "",
+      "---",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     outputChannel.appendLine(logMessage);
   }
@@ -410,9 +426,9 @@ export class ErrorHandler {
   private sanitizeErrorMessage(message: string): string {
     // Remove potential PAT tokens (pattern: base64-like strings)
     return message
-      .replace(/[A-Za-z0-9+/]{20,}={0,2}/g, '[REDACTED]')
-      .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, 'Bearer [REDACTED]')
-      .replace(/Basic\s+[A-Za-z0-9+/]+=*/gi, 'Basic [REDACTED]');
+      .replace(/[A-Za-z0-9+/]{20,}={0,2}/g, "[REDACTED]")
+      .replace(/Bearer\s+[A-Za-z0-9\-._~+/]+=*/gi, "Bearer [REDACTED]")
+      .replace(/Basic\s+[A-Za-z0-9+/]+=*/gi, "Basic [REDACTED]");
   }
 
   /**
@@ -421,7 +437,9 @@ export class ErrorHandler {
    * @param context Original context object
    * @returns Sanitized context object
    */
-  private sanitizeContext(context?: Record<string, any>): Record<string, any> | undefined {
+  private sanitizeContext(
+    context?: Record<string, any>
+  ): Record<string, any> | undefined {
     if (!context) {
       return undefined;
     }
@@ -429,13 +447,20 @@ export class ErrorHandler {
     const sanitized = { ...context };
 
     // Remove sensitive keys
-    const sensitiveKeys = ['token', 'pat', 'password', 'secret', 'key', 'authorization'];
+    const sensitiveKeys = [
+      "token",
+      "pat",
+      "password",
+      "secret",
+      "key",
+      "authorization",
+    ];
 
     for (const key of Object.keys(sanitized)) {
       const lowerKey = key.toLowerCase();
-      if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
-        sanitized[key] = '[REDACTED]';
-      } else if (typeof sanitized[key] === 'string') {
+      if (sensitiveKeys.some((sensitive) => lowerKey.includes(sensitive))) {
+        sanitized[key] = "[REDACTED]";
+      } else if (typeof sanitized[key] === "string") {
         sanitized[key] = this.sanitizeErrorMessage(sanitized[key]);
       }
     }
@@ -464,30 +489,35 @@ export class ErrorHandler {
    * @param message Error message
    * @returns User action suggestion
    */
-  private generateUserAction(category: ErrorCategory, severity: ErrorSeverity, message: string): string {
+  private generateUserAction(
+    category: ErrorCategory,
+    severity: ErrorSeverity,
+    message: string
+  ): string {
     switch (category) {
       case ErrorCategory.AUTHENTICATION:
-        return 'Please check your Personal Access Token in the extension settings.';
+        return "Please check your Personal Access Token in the extension settings.";
 
       case ErrorCategory.CONFIGURATION:
-        return 'Please review your Azure DevOps connection settings.';
+        return "Please review your Azure DevOps connection settings.";
 
       case ErrorCategory.NETWORK:
-        return 'Please check your internet connection and try again.';
+        return "Please check your internet connection and try again.";
 
       case ErrorCategory.API:
-        if (message.toLowerCase().includes('rate limit')) {
-          return 'API rate limit reached. Please wait a moment before trying again.';
+        if (message.toLowerCase().includes("rate limit")) {
+          return "API rate limit reached. Please wait a moment before trying again.";
         }
-        return 'Please try again in a few moments. If the problem persists, check Azure DevOps service status.';
+        return "Please try again in a few moments. If the problem persists, check Azure DevOps service status.";
 
       case ErrorCategory.UI:
-        return 'Please refresh the view or restart VS Code if the problem persists.';
+        return "Please refresh the view or restart VS Code if the problem persists.";
 
       default:
-        return severity === ErrorSeverity.CRITICAL || severity === ErrorSeverity.HIGH
-          ? 'Please report this issue if it continues to occur.'
-          : 'Please try the operation again.';
+        return severity === ErrorSeverity.CRITICAL ||
+          severity === ErrorSeverity.HIGH
+          ? "Please report this issue if it continues to occur."
+          : "Please try the operation again.";
     }
   }
 
@@ -501,7 +531,7 @@ export class ErrorHandler {
     let hash = 0;
     for (let i = 0; i < input.length; i++) {
       const char = input.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(36).substring(0, 6).toUpperCase();

@@ -41,9 +41,15 @@ export interface TeamProject {
   readonly name: string;
   readonly description?: string;
   readonly url: string;
-  readonly state: 'deleting' | 'new' | 'wellFormed' | 'createPending' | 'updating' | 'unchanged';
+  readonly state:
+    | "deleting"
+    | "new"
+    | "wellFormed"
+    | "createPending"
+    | "updating"
+    | "unchanged";
   readonly revision: number;
-  readonly visibility: 'private' | 'public';
+  readonly visibility: "private" | "public";
   readonly lastUpdateTime: Date;
 }
 
@@ -72,7 +78,12 @@ export interface GitUserDate {
 /**
  * Pull request status enumeration
  */
-export type PullRequestStatus = 'abandoned' | 'active' | 'completed' | 'draft' | 'notSet';
+export type PullRequestStatus =
+  | "abandoned"
+  | "active"
+  | "completed"
+  | "draft"
+  | "notSet";
 
 /**
  * Pull request vote enumeration
@@ -83,12 +94,12 @@ export type PullRequestVote = -10 | -5 | 0 | 5 | 10;
  * Pull request merge status
  */
 export type PullRequestMergeStatus =
-  | 'conflicts'
-  | 'failure'
-  | 'notSet'
-  | 'queued'
-  | 'rejectedByPolicy'
-  | 'succeeded';
+  | "conflicts"
+  | "failure"
+  | "notSet"
+  | "queued"
+  | "rejectedByPolicy"
+  | "succeeded";
 
 /**
  * Azure DevOps Pull Request model
@@ -151,20 +162,22 @@ export interface CommentThread {
   readonly properties?: any;
   readonly identities?: { [key: string]: Identity } | undefined;
   readonly isDeleted: boolean;
-  readonly pullRequestThreadContext?: PullRequestCommentThreadContext | undefined;
+  readonly pullRequestThreadContext?:
+    | PullRequestCommentThreadContext
+    | undefined;
 }
 
 /**
  * Comment thread status
  */
 export type CommentThreadStatus =
-  | 'active'
-  | 'byDesign'
-  | 'closed'
-  | 'fixed'
-  | 'pending'
-  | 'unknown'
-  | 'wontFix';
+  | "active"
+  | "byDesign"
+  | "closed"
+  | "fixed"
+  | "pending"
+  | "unknown"
+  | "wontFix";
 
 /**
  * Individual comment within a thread
@@ -186,7 +199,7 @@ export interface Comment {
 /**
  * Comment type enumeration
  */
-export type CommentType = 'codeChange' | 'system' | 'text' | 'unknown';
+export type CommentType = "codeChange" | "system" | "text" | "unknown";
 
 /**
  * Comment thread context for file positioning
@@ -276,12 +289,12 @@ export interface GitPullRequestIteration {
  * Iteration reason enumeration
  */
 export type IterationReason =
-  | 'create'
-  | 'forcePush'
-  | 'push'
-  | 'rebase'
-  | 'retarget'
-  | 'unknown';
+  | "create"
+  | "forcePush"
+  | "push"
+  | "rebase"
+  | "retarget"
+  | "unknown";
 
 /**
  * Pull request file change
@@ -297,20 +310,20 @@ export interface GitPullRequestChange {
  * Version control change type
  */
 export type VersionControlChangeType =
-  | 'add'
-  | 'branch'
-  | 'delete'
-  | 'edit'
-  | 'encoding'
-  | 'lock'
-  | 'merge'
-  | 'none'
-  | 'property'
-  | 'rename'
-  | 'rollback'
-  | 'sourceRename'
-  | 'targetRename'
-  | 'undelete';
+  | "add"
+  | "branch"
+  | "delete"
+  | "edit"
+  | "encoding"
+  | "lock"
+  | "merge"
+  | "none"
+  | "property"
+  | "rename"
+  | "rollback"
+  | "sourceRename"
+  | "targetRename"
+  | "undelete";
 
 /**
  * Git item (file or folder)
@@ -329,7 +342,15 @@ export interface GitItem {
 /**
  * Git object type enumeration
  */
-export type GitObjectType = 'bad' | 'blob' | 'commit' | 'ext2' | 'ofsDelta' | 'refDelta' | 'tag' | 'tree';
+export type GitObjectType =
+  | "bad"
+  | "blob"
+  | "commit"
+  | "ext2"
+  | "ofsDelta"
+  | "refDelta"
+  | "tag"
+  | "tree";
 
 /**
  * File content metadata
@@ -379,13 +400,13 @@ export interface PolicyEvaluationRecord {
  * Policy evaluation status
  */
 export type PolicyEvaluationStatus =
-  | 'approved'
-  | 'broken'
-  | 'failed'
-  | 'notApplicable'
-  | 'queued'
-  | 'rejected'
-  | 'running';
+  | "approved"
+  | "broken"
+  | "failed"
+  | "notApplicable"
+  | "queued"
+  | "rejected"
+  | "running";
 
 /**
  * Policy configuration

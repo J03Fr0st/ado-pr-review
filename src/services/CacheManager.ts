@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
 
 /**
  * Cache entry with metadata
@@ -47,7 +47,7 @@ export type CacheKeyGenerator = (operation: string, ...params: any[]) => string;
 /**
  * Cache invalidation strategy
  */
-export type CacheInvalidationStrategy = 'exact' | 'prefix' | 'pattern' | 'tag';
+export type CacheInvalidationStrategy = "exact" | "prefix" | "pattern" | "tag";
 
 /**
  * Cache invalidation rule
@@ -75,7 +75,10 @@ export interface CacheInvalidationRule {
  */
 export class CacheManager {
   private readonly memoryCache = new Map<string, CacheEntry<any>>();
-  private readonly hitCounters = new Map<string, { hits: number; misses: number }>();
+  private readonly hitCounters = new Map<
+    string,
+    { hits: number; misses: number }
+  >();
   private readonly cleanupIntervals = new Set<NodeJS.Timeout>();
   private readonly invalidationRules = new Set<CacheInvalidationRule>();
 
@@ -98,12 +101,15 @@ export class CacheManager {
     }
 
     // Setup cleanup intervals
-    const cleanupInterval = setInterval(() => this.performCleanup(), this.config.cleanupInterval);
+    const cleanupInterval = setInterval(
+      () => this.performCleanup(),
+      this.config.cleanupInterval
+    );
     this.cleanupIntervals.add(cleanupInterval);
 
     // Setup context for cleanup
     this.context.subscriptions.push({
-      dispose: () => this.dispose()
+      dispose: () => this.dispose(),
     });
 
     this.initialized = true;
@@ -131,7 +137,8 @@ export class CacheManager {
 
     // Check session storage
     const sessionKey = `cache_${key}`;
-    const sessionEntry = this.context.workspaceState.get<CacheEntry<T>>(sessionKey);
+    const sessionEntry =
+      this.context.workspaceState.get<CacheEntry<T>>(sessionKey);
     if (sessionEntry && this.isValidEntry(sessionEntry)) {
       // Promote to memory cache with compression if needed
       await this.promoteToMemoryCache(key, sessionEntry);
@@ -169,7 +176,7 @@ export class CacheManager {
       expiry,
       accessCount: 0,
       lastAccess: Date.now(),
-      metadata: { ...metadata, tags }
+      metadata: { ...metadata, tags },
     };
 
     // Store in memory cache
@@ -181,8 +188,8 @@ export class CacheManager {
     }
 
     // Store in session storage (async)
-    this.setSessionCache(key, entry).catch(error => {
-      console.error('Failed to store in session cache:', error);
+    this.setSessionCache(key, entry).catch((error) => {
+      console.error("Failed to store in session cache:", error);
     });
   }
 
@@ -215,7 +222,9 @@ export class CacheManager {
     this.memoryCache.clear();
 
     // Clear session storage
-    const keys = this.context.workspaceState.keys().filter(key => key.startsWith('cache_'));
+    const keys = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("cache_"));
     for (const key of keys) {
       await this.context.workspaceState.update(key, undefined);
     }
@@ -260,8 +269,9 @@ export class CacheManager {
    */
   getStatistics(): CacheStatistics {
     const memoryEntries = this.memoryCache.size;
-    const sessionEntries = this.context.workspaceState.keys()
-      .filter(key => key.startsWith('cache_')).length;
+    const sessionEntries = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("cache_")).length;
 
     let totalHits = 0;
     let totalMisses = 0;
@@ -271,7 +281,8 @@ export class CacheManager {
       totalMisses += counters.misses;
     }
 
-    const hitRate = totalHits + totalMisses > 0 ? totalHits / (totalHits + totalMisses) : 0;
+    const hitRate =
+      totalHits + totalMisses > 0 ? totalHits / (totalHits + totalMisses) : 0;
 
     // Calculate memory usage
     let totalMemoryUsage = 0;
@@ -279,7 +290,8 @@ export class CacheManager {
       totalMemoryUsage += JSON.stringify(entry.data).length;
     }
 
-    const averageEntrySize = memoryEntries > 0 ? totalMemoryUsage / memoryEntries : 0;
+    const averageEntrySize =
+      memoryEntries > 0 ? totalMemoryUsage / memoryEntries : 0;
 
     return {
       memoryEntries,
@@ -289,7 +301,7 @@ export class CacheManager {
       evictions: this.calculateEvictions(),
       hitRate,
       totalMemoryUsage,
-      averageEntrySize
+      averageEntrySize,
     };
   }
 
@@ -301,17 +313,17 @@ export class CacheManager {
    * @returns Generated cache key
    */
   generateKey(operation: string, ...params: any[]): string {
-    const normalizedParams = params.map(param => {
+    const normalizedParams = params.map((param) => {
       if (param === null || param === undefined) {
-        return 'null';
+        return "null";
       }
-      if (typeof param === 'object') {
+      if (typeof param === "object") {
         return JSON.stringify(param);
       }
       return String(param);
     });
 
-    return `${operation}_${normalizedParams.join('_')}`;
+    return `${operation}_${normalizedParams.join("_")}`;
   }
 
   /**
@@ -342,7 +354,10 @@ export class CacheManager {
    * @param key Cache key
    * @param metadata New metadata to merge
    */
-  async updateMetadata(key: string, metadata: Record<string, any>): Promise<void> {
+  async updateMetadata(
+    key: string,
+    metadata: Record<string, any>
+  ): Promise<void> {
     const memoryEntry = this.memoryCache.get(key);
     if (memoryEntry) {
       memoryEntry.metadata = { ...memoryEntry.metadata, ...metadata };
@@ -384,10 +399,10 @@ export class CacheManager {
     factory: (key: string) => Promise<T>,
     ttl?: number
   ): Promise<void> {
-    const missingKeys = keys.filter(key => !this.memoryCache.has(key));
+    const missingKeys = keys.filter((key) => !this.memoryCache.has(key));
 
     await Promise.all(
-      missingKeys.map(async key => {
+      missingKeys.map(async (key) => {
         try {
           const data = await factory(key);
           await this.set(key, data, ttl);
@@ -419,7 +434,7 @@ export class CacheManager {
    */
   private ensureInitialized(): void {
     if (!this.initialized) {
-      throw new Error('CacheManager not initialized. Call initialize() first.');
+      throw new Error("CacheManager not initialized. Call initialize() first.");
     }
   }
 
@@ -433,7 +448,7 @@ export class CacheManager {
       maxSessionEntries: 500,
       enableCompression: true,
       enableEviction: true,
-      cleanupInterval: 60000 // 1 minute
+      cleanupInterval: 60000, // 1 minute
     };
 
     return { ...defaults, ...config };
@@ -471,7 +486,10 @@ export class CacheManager {
   /**
    * Store data in session cache with compression if needed
    */
-  private async setSessionCache<T>(key: string, entry: CacheEntry<T>): Promise<void> {
+  private async setSessionCache<T>(
+    key: string,
+    entry: CacheEntry<T>
+  ): Promise<void> {
     const sessionKey = `cache_${key}`;
     let dataToStore = entry;
 
@@ -503,7 +521,10 @@ export class CacheManager {
   /**
    * Promote session cache entry to memory cache
    */
-  private async promoteToMemoryCache<T>(key: string, entry: CacheEntry<T>): Promise<void> {
+  private async promoteToMemoryCache<T>(
+    key: string,
+    entry: CacheEntry<T>
+  ): Promise<void> {
     this.memoryCache.set(key, entry);
     this.updateAccessStats(key, entry);
 
@@ -522,8 +543,9 @@ export class CacheManager {
     }
 
     // Sort by last access time (LRU)
-    const entries = Array.from(this.memoryCache.entries())
-      .sort(([, a], [, b]) => a.lastAccess - b.lastAccess);
+    const entries = Array.from(this.memoryCache.entries()).sort(
+      ([, a], [, b]) => a.lastAccess - b.lastAccess
+    );
 
     // Remove oldest entries
     const toRemove = entries.length - this.config.maxMemoryEntries;
@@ -544,18 +566,20 @@ export class CacheManager {
   /**
    * Apply invalidation rule
    */
-  private async applyInvalidationRule(rule: CacheInvalidationRule): Promise<void> {
+  private async applyInvalidationRule(
+    rule: CacheInvalidationRule
+  ): Promise<void> {
     switch (rule.strategy) {
-      case 'exact':
+      case "exact":
         await this.delete(rule.pattern);
         break;
-      case 'prefix':
+      case "prefix":
         await this.invalidateByPrefix(rule.pattern);
         break;
-      case 'pattern':
+      case "pattern":
         await this.invalidateByPattern(rule.pattern);
         break;
-      case 'tag':
+      case "tag":
         await this.invalidateByTags(rule.tags || []);
         break;
     }
@@ -573,8 +597,9 @@ export class CacheManager {
     }
 
     // Session cache
-    const sessionKeys = this.context.workspaceState.keys()
-      .filter(key => key.startsWith('cache_') && key.includes(prefix));
+    const sessionKeys = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("cache_") && key.includes(prefix));
     for (const sessionKey of sessionKeys) {
       await this.context.workspaceState.update(sessionKey, undefined);
     }
@@ -594,8 +619,9 @@ export class CacheManager {
     }
 
     // Session cache
-    const sessionKeys = this.context.workspaceState.keys()
-      .filter(key => key.startsWith('cache_'));
+    const sessionKeys = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("cache_"));
     for (const sessionKey of sessionKeys) {
       const key = sessionKey.substring(6); // Remove 'cache_' prefix
       if (regex.test(key)) {
@@ -614,18 +640,26 @@ export class CacheManager {
 
     // Memory cache
     for (const [key, entry] of this.memoryCache.entries()) {
-      if (entry.metadata?.tags && tags.some(tag => (entry.metadata?.tags || []).includes(tag))) {
+      if (
+        entry.metadata?.tags &&
+        tags.some((tag) => (entry.metadata?.tags || []).includes(tag))
+      ) {
         this.memoryCache.delete(key);
       }
     }
 
     // Session cache (more complex - would need to load and check each entry)
     // This is simplified for now
-    const sessionKeys = this.context.workspaceState.keys()
-      .filter(key => key.startsWith('cache_'));
+    const sessionKeys = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("cache_"));
     for (const sessionKey of sessionKeys) {
-      const entry = this.context.workspaceState.get<CacheEntry<any>>(sessionKey);
-      if (entry?.metadata?.tags && tags.some(tag => (entry.metadata?.tags || []).includes(tag))) {
+      const entry =
+        this.context.workspaceState.get<CacheEntry<any>>(sessionKey);
+      if (
+        entry?.metadata?.tags &&
+        tags.some((tag) => (entry.metadata?.tags || []).includes(tag))
+      ) {
         await this.context.workspaceState.update(sessionKey, undefined);
       }
     }
@@ -645,10 +679,12 @@ export class CacheManager {
     }
 
     // Clean session cache
-    const sessionKeys = this.context.workspaceState.keys()
-      .filter(key => key.startsWith('cache_'));
+    const sessionKeys = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("cache_"));
     for (const sessionKey of sessionKeys) {
-      const entry = this.context.workspaceState.get<CacheEntry<any>>(sessionKey);
+      const entry =
+        this.context.workspaceState.get<CacheEntry<any>>(sessionKey);
       if (entry && now >= entry.expiry) {
         await this.context.workspaceState.update(sessionKey, undefined);
       }

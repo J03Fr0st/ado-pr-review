@@ -1,288 +1,329 @@
-import * as vscode from 'vscode';
-import { PullRequestService } from '../services/PullRequestService';
-import { CommentService, CreateCommentOptions } from '../services/CommentService';
-import { TelemetryService } from '../services/TelemetryService';
-import { PullRequest, CommentThread, Comment, GitPullRequestIteration, PullRequestVote } from '../api/models';
-import { ErrorHandler, ErrorCategory } from '../utils/ErrorHandler';
+import * as vscode from "vscode";
+import { PullRequestService } from "../services/PullRequestService";
+import {
+  CommentService,
+  CreateCommentOptions,
+} from "../services/CommentService";
+import { TelemetryService } from "../services/TelemetryService";
+import {
+  PullRequest,
+  CommentThread,
+  Comment,
+  GitPullRequestIteration,
+  PullRequestVote,
+} from "../api/models";
+import { ErrorHandler, ErrorCategory } from "../utils/ErrorHandler";
 
 /**
  * WebView panel for pull request details
  */
 export class PRDetailWebView implements vscode.Disposable {
-    private readonly panel: vscode.WebviewPanel;
-    private readonly pullRequestService: PullRequestService;
-    private readonly commentService: CommentService;
-    private readonly telemetryService: TelemetryService;
-    private readonly errorHandler: ErrorHandler;
-    private readonly pullRequest: PullRequest;
-    private readonly repositoryId: string;
+  private readonly panel: vscode.WebviewPanel;
+  private readonly pullRequestService: PullRequestService;
+  private readonly commentService: CommentService;
+  private readonly telemetryService: TelemetryService;
+  private readonly errorHandler: ErrorHandler;
+  private readonly pullRequest: PullRequest;
+  private readonly repositoryId: string;
 
-    private disposables: vscode.Disposable[] = [];
+  private disposables: vscode.Disposable[] = [];
 
-    constructor(
-        pullRequest: PullRequest,
-        repositoryId: string,
-        pullRequestService: PullRequestService,
-        commentService: CommentService,
-        telemetryService: TelemetryService,
-        extensionUri: vscode.Uri
-    ) {
-        this.pullRequest = pullRequest;
-        this.repositoryId = repositoryId;
-        this.pullRequestService = pullRequestService;
-        this.commentService = commentService;
-        this.telemetryService = telemetryService;
-        this.errorHandler = ErrorHandler.getInstance(telemetryService);
+  constructor(
+    pullRequest: PullRequest,
+    repositoryId: string,
+    pullRequestService: PullRequestService,
+    commentService: CommentService,
+    telemetryService: TelemetryService,
+    extensionUri: vscode.Uri
+  ) {
+    this.pullRequest = pullRequest;
+    this.repositoryId = repositoryId;
+    this.pullRequestService = pullRequestService;
+    this.commentService = commentService;
+    this.telemetryService = telemetryService;
+    this.errorHandler = ErrorHandler.getInstance(telemetryService);
 
-        this.panel = vscode.window.createWebviewPanel(
-            'prDetail',
-            `PR #${pullRequest.pullRequestId}: ${pullRequest.title}`,
-            vscode.ViewColumn.Beside,
-            {
-                enableScripts: true,
-                enableCommandUris: true,
-                localResourceRoots: [
-                    vscode.Uri.joinPath(extensionUri, 'out'),
-                    vscode.Uri.joinPath(extensionUri, 'webview')
-                ]
-            }
+    this.panel = vscode.window.createWebviewPanel(
+      "prDetail",
+      `PR #${pullRequest.pullRequestId}: ${pullRequest.title}`,
+      vscode.ViewColumn.Beside,
+      {
+        enableScripts: true,
+        enableCommandUris: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(extensionUri, "out"),
+          vscode.Uri.joinPath(extensionUri, "webview"),
+        ],
+      }
+    );
+
+    this.panel.webview.html = this.getHtmlContent();
+    this.setupEventListeners();
+    this.loadPullRequestData();
+
+    this.telemetryService.trackEvent("prDetailOpened", {
+      pullRequestId: pullRequest.pullRequestId.toString(),
+      repositoryId: repositoryId,
+    });
+  }
+
+  /**
+   * Setup webview event listeners
+   */
+  private setupEventListeners(): void {
+    this.panel.onDidDispose(() => {
+      this.dispose();
+    });
+
+    this.panel.webview.onDidReceiveMessage(async (message) => {
+      try {
+        await this.handleWebviewMessage(message);
+      } catch (error) {
+        this.errorHandler.handleError(
+          error instanceof Error ? error : String(error),
+          ErrorCategory.UI
         );
+      }
+    });
+  }
 
-        this.panel.webview.html = this.getHtmlContent();
-        this.setupEventListeners();
-        this.loadPullRequestData();
+  /**
+   * Handle messages from webview
+   */
+  private async handleWebviewMessage(message: any): Promise<void> {
+    switch (message.type) {
+      case "approve":
+        await this.approvePullRequest();
+        break;
+      case "reject":
+        await this.rejectPullRequest(message.comment);
+        break;
+      case "abandon":
+        await this.abandonPullRequest();
+        break;
+      case "addComment":
+        await this.addComment(message.content, message.threadId);
+        break;
+      case "refresh":
+        await this.refreshData();
+        break;
+      case "openInBrowser":
+        await this.openInBrowser();
+        break;
+      case "vote":
+        await this.vote(message.vote as PullRequestVote);
+        break;
+      default:
+        console.warn("Unknown message type:", message.type);
+    }
+  }
 
-        this.telemetryService.trackEvent('prDetailOpened', {
-            pullRequestId: pullRequest.pullRequestId.toString(),
-            repositoryId: repositoryId
+  /**
+   * Load pull request data
+   */
+  private async loadPullRequestData(): Promise<void> {
+    try {
+      // Load pull request details
+      const [comments, iterations] = await Promise.all([
+        this.commentService.getCommentThreads(
+          this.repositoryId,
+          this.pullRequest.pullRequestId
+        ),
+        this.pullRequestService.getPullRequestIterations(
+          this.repositoryId,
+          this.pullRequest.pullRequestId
+        ),
+      ]);
+
+      this.panel.webview.postMessage({
+        type: "dataLoaded",
+        data: {
+          pullRequest: this.pullRequest,
+          comments,
+          iterations,
+        },
+      });
+    } catch (error) {
+      this.errorHandler.handleError(
+        error instanceof Error ? error : String(error),
+        ErrorCategory.UI
+      );
+      this.panel.webview.postMessage({
+        type: "error",
+        error: error instanceof Error ? error.message : "Failed to load data",
+      });
+    }
+  }
+
+  /**
+   * Approve pull request
+   */
+  private async approvePullRequest(): Promise<void> {
+    try {
+      const result = await this.pullRequestService.approvePullRequest(
+        this.repositoryId,
+        this.pullRequest.pullRequestId
+      );
+
+      if (result.success) {
+        this.panel.webview.postMessage({ type: "approved" });
+        this.refreshData();
+      } else {
+        this.panel.webview.postMessage({
+          type: "error",
+          error: result.error || "Failed to approve pull request",
         });
+      }
+    } catch (error) {
+      this.errorHandler.handleError(
+        error instanceof Error ? error : String(error),
+        ErrorCategory.UI
+      );
     }
+  }
 
-    /**
-     * Setup webview event listeners
-     */
-    private setupEventListeners(): void {
-        this.panel.onDidDispose(() => {
-            this.dispose();
+  /**
+   * Reject pull request
+   */
+  private async rejectPullRequest(comment: string): Promise<void> {
+    try {
+      const result = await this.pullRequestService.rejectPullRequest(
+        this.repositoryId,
+        this.pullRequest.pullRequestId,
+        comment
+      );
+
+      if (result.success) {
+        this.panel.webview.postMessage({ type: "rejected" });
+        this.refreshData();
+      } else {
+        this.panel.webview.postMessage({
+          type: "error",
+          error: result.error || "Failed to reject pull request",
         });
+      }
+    } catch (error) {
+      this.errorHandler.handleError(
+        error instanceof Error ? error : String(error),
+        ErrorCategory.UI
+      );
+    }
+  }
 
-        this.panel.webview.onDidReceiveMessage(async (message) => {
-            try {
-                await this.handleWebviewMessage(message);
-            } catch (error) {
-                this.errorHandler.handleError(error instanceof Error ? error : String(error), ErrorCategory.UI);
-            }
+  /**
+   * Abandon pull request
+   */
+  private async abandonPullRequest(): Promise<void> {
+    try {
+      const result = await this.pullRequestService.abandonPullRequest(
+        this.repositoryId,
+        this.pullRequest.pullRequestId
+      );
+
+      if (result.success) {
+        this.panel.webview.postMessage({ type: "abandoned" });
+        this.refreshData();
+      } else {
+        this.panel.webview.postMessage({
+          type: "error",
+          error: result.error || "Failed to abandon pull request",
         });
+      }
+    } catch (error) {
+      this.errorHandler.handleError(
+        error instanceof Error ? error : String(error),
+        ErrorCategory.UI
+      );
     }
+  }
 
-    /**
-     * Handle messages from webview
-     */
-    private async handleWebviewMessage(message: any): Promise<void> {
-        switch (message.type) {
-            case 'approve':
-                await this.approvePullRequest();
-                break;
-            case 'reject':
-                await this.rejectPullRequest(message.comment);
-                break;
-            case 'abandon':
-                await this.abandonPullRequest();
-                break;
-            case 'addComment':
-                await this.addComment(message.content, message.threadId);
-                break;
-            case 'refresh':
-                await this.refreshData();
-                break;
-            case 'openInBrowser':
-                await this.openInBrowser();
-                break;
-            case 'vote':
-                await this.vote(message.vote as PullRequestVote);
-                break;
-            default:
-                console.warn('Unknown message type:', message.type);
-        }
+  /**
+   * Add comment
+   */
+  private async addComment(content: string, threadId?: number): Promise<void> {
+    try {
+      const options: CreateCommentOptions = {
+        content,
+        threadId,
+      };
+      const result = await this.commentService.addComment(
+        this.repositoryId,
+        this.pullRequest.pullRequestId,
+        options
+      );
+
+      if (result) {
+        this.panel.webview.postMessage({ type: "commentAdded" });
+        this.refreshData();
+      } else {
+        this.panel.webview.postMessage({
+          type: "error",
+          error: "Failed to add comment",
+        });
+      }
+    } catch (error) {
+      this.errorHandler.handleError(
+        error instanceof Error ? error : String(error),
+        ErrorCategory.UI
+      );
     }
+  }
 
-    /**
-     * Load pull request data
-     */
-    private async loadPullRequestData(): Promise<void> {
-        try {
-            // Load pull request details
-            const [comments, iterations] = await Promise.all([
-                this.commentService.getCommentThreads(this.repositoryId, this.pullRequest.pullRequestId),
-                this.pullRequestService.getPullRequestIterations(this.repositoryId, this.pullRequest.pullRequestId)
-            ]);
-
-            this.panel.webview.postMessage({
-                type: 'dataLoaded',
-                data: {
-                    pullRequest: this.pullRequest,
-                    comments,
-                    iterations
-                }
-            });
-        } catch (error) {
-            this.errorHandler.handleError(error instanceof Error ? error : String(error), ErrorCategory.UI);
-            this.panel.webview.postMessage({
-                type: 'error',
-                error: error instanceof Error ? error.message : 'Failed to load data'
-            });
-        }
+  /**
+   * Vote on pull request
+   */
+  private async vote(vote: PullRequestVote): Promise<void> {
+    try {
+      await this.pullRequestService.votePullRequest(
+        this.repositoryId,
+        this.pullRequest.pullRequestId,
+        vote
+      );
+      this.refreshData();
+    } catch (error) {
+      this.errorHandler.handleError(
+        error instanceof Error ? error : String(error),
+        ErrorCategory.UI
+      );
     }
+  }
 
-    /**
-     * Approve pull request
-     */
-    private async approvePullRequest(): Promise<void> {
-        try {
-            const result = await this.pullRequestService.approvePullRequest(
-                this.repositoryId,
-                this.pullRequest.pullRequestId
-            );
+  /**
+   * Refresh pull request data
+   */
+  private async refreshData(): Promise<void> {
+    await this.loadPullRequestData();
+  }
 
-            if (result.success) {
-                this.panel.webview.postMessage({ type: 'approved' });
-                this.refreshData();
-            } else {
-                this.panel.webview.postMessage({
-                    type: 'error',
-                    error: result.error || 'Failed to approve pull request'
-                });
-            }
-        } catch (error) {
-            this.errorHandler.handleError(error instanceof Error ? error : String(error), ErrorCategory.UI);
-        }
+  /**
+   * Open pull request in browser
+   */
+  private async openInBrowser(): Promise<void> {
+    try {
+      if (this.pullRequest.webUrl) {
+        vscode.env.openExternal(vscode.Uri.parse(this.pullRequest.webUrl));
+      }
+    } catch (error) {
+      this.errorHandler.handleError(
+        error instanceof Error ? error : String(error),
+        ErrorCategory.UI
+      );
     }
+  }
 
-    /**
-     * Reject pull request
-     */
-    private async rejectPullRequest(comment: string): Promise<void> {
-        try {
-            const result = await this.pullRequestService.rejectPullRequest(
-                this.repositoryId,
-                this.pullRequest.pullRequestId,
-                comment
-            );
-
-            if (result.success) {
-                this.panel.webview.postMessage({ type: 'rejected' });
-                this.refreshData();
-            } else {
-                this.panel.webview.postMessage({
-                    type: 'error',
-                    error: result.error || 'Failed to reject pull request'
-                });
-            }
-        } catch (error) {
-            this.errorHandler.handleError(error instanceof Error ? error : String(error), ErrorCategory.UI);
-        }
-    }
-
-    /**
-     * Abandon pull request
-     */
-    private async abandonPullRequest(): Promise<void> {
-        try {
-            const result = await this.pullRequestService.abandonPullRequest(
-                this.repositoryId,
-                this.pullRequest.pullRequestId
-            );
-
-            if (result.success) {
-                this.panel.webview.postMessage({ type: 'abandoned' });
-                this.refreshData();
-            } else {
-                this.panel.webview.postMessage({
-                    type: 'error',
-                    error: result.error || 'Failed to abandon pull request'
-                });
-            }
-        } catch (error) {
-            this.errorHandler.handleError(error instanceof Error ? error : String(error), ErrorCategory.UI);
-        }
-    }
-
-    /**
-     * Add comment
-     */
-    private async addComment(content: string, threadId?: number): Promise<void> {
-        try {
-            const options: CreateCommentOptions = {
-                content,
-                threadId
-            };
-            const result = await this.commentService.addComment(
-                this.repositoryId,
-                this.pullRequest.pullRequestId,
-                options
-            );
-
-            if (result) {
-                this.panel.webview.postMessage({ type: 'commentAdded' });
-                this.refreshData();
-            } else {
-                this.panel.webview.postMessage({
-                    type: 'error',
-                    error: 'Failed to add comment'
-                });
-            }
-        } catch (error) {
-            this.errorHandler.handleError(error instanceof Error ? error : String(error), ErrorCategory.UI);
-        }
-    }
-
-    /**
-     * Vote on pull request
-     */
-    private async vote(vote: PullRequestVote): Promise<void> {
-        try {
-            await this.pullRequestService.votePullRequest(
-                this.repositoryId,
-                this.pullRequest.pullRequestId,
-                vote
-            );
-            this.refreshData();
-        } catch (error) {
-            this.errorHandler.handleError(error instanceof Error ? error : String(error), ErrorCategory.UI);
-        }
-    }
-
-    /**
-     * Refresh pull request data
-     */
-    private async refreshData(): Promise<void> {
-        await this.loadPullRequestData();
-    }
-
-    /**
-     * Open pull request in browser
-     */
-    private async openInBrowser(): Promise<void> {
-        try {
-            if (this.pullRequest.webUrl) {
-                vscode.env.openExternal(vscode.Uri.parse(this.pullRequest.webUrl));
-            }
-        } catch (error) {
-            this.errorHandler.handleError(error instanceof Error ? error : String(error), ErrorCategory.UI);
-        }
-    }
-
-    /**
-     * Get HTML content for webview
-     */
-    private getHtmlContent(): string {
-        return `
+  /**
+   * Get HTML content for webview
+   */
+  private getHtmlContent(): string {
+    return `
             <!DOCTYPE html>
             <html lang="en">
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>PR #${this.pullRequest.pullRequestId}: ${this.escapeHtml(this.pullRequest.title)}</title>
+                <title>PR #${this.pullRequest.pullRequestId}: ${this.escapeHtml(
+      this.pullRequest.title
+    )}</title>
                 <style>
                     ${this.getCss()}
                 </style>
@@ -290,12 +331,24 @@ export class PRDetailWebView implements vscode.Disposable {
             <body>
                 <div class="container">
                     <div class="header">
-                        <h1>PR #${this.pullRequest.pullRequestId}: ${this.escapeHtml(this.pullRequest.title)}</h1>
+                        <h1>PR #${
+                          this.pullRequest.pullRequestId
+                        }: ${this.escapeHtml(this.pullRequest.title)}</h1>
                         <div class="meta">
-                            <span class="author">${this.escapeHtml(this.pullRequest.createdBy.displayName)}</span>
-                            <span class="date">${new Date(this.pullRequest.creationDate).toLocaleDateString()}</span>
-                            <span class="status status-${this.pullRequest.status}">${this.pullRequest.status}</span>
-                            ${this.pullRequest.isDraft ? '<span class="draft">Draft</span>' : ''}
+                            <span class="author">${this.escapeHtml(
+                              this.pullRequest.createdBy.displayName
+                            )}</span>
+                            <span class="date">${new Date(
+                              this.pullRequest.creationDate
+                            ).toLocaleDateString()}</span>
+                            <span class="status status-${
+                              this.pullRequest.status
+                            }">${this.pullRequest.status}</span>
+                            ${
+                              this.pullRequest.isDraft
+                                ? '<span class="draft">Draft</span>'
+                                : ""
+                            }
                         </div>
                     </div>
 
@@ -321,7 +374,9 @@ export class PRDetailWebView implements vscode.Disposable {
                         <div class="description">
                             <h2>Description</h2>
                             <div class="description-content">
-                                ${this.formatDescription(this.pullRequest.description)}
+                                ${this.formatDescription(
+                                  this.pullRequest.description
+                                )}
                             </div>
                         </div>
 
@@ -369,13 +424,13 @@ export class PRDetailWebView implements vscode.Disposable {
             </body>
             </html>
         `;
-    }
+  }
 
-    /**
-     * Get CSS content
-     */
-    private getCss(): string {
-        return `
+  /**
+   * Get CSS content
+   */
+  private getCss(): string {
+    return `
             * {
                 box-sizing: border-box;
                 margin: 0;
@@ -620,13 +675,13 @@ export class PRDetailWebView implements vscode.Disposable {
                 }
             }
         `;
-    }
+  }
 
-    /**
-     * Get JavaScript content
-     */
-    private getJavaScript(): string {
-        return `
+  /**
+   * Get JavaScript content
+   */
+  private getJavaScript(): string {
+    return `
             const vscode = acquireVsCodeApi();
 
             function postMessage(message) {
@@ -773,38 +828,38 @@ export class PRDetailWebView implements vscode.Disposable {
                 postMessage({ type: 'refresh' });
             });
         `;
-    }
+  }
 
-    /**
-     * Format description with markdown-like syntax
-     */
-    private formatDescription(description: string): string {
-        return description
-            .split('\n')
-            .map(line => line.trim())
-            .filter(line => line.length > 0)
-            .join('<br>');
-    }
+  /**
+   * Format description with markdown-like syntax
+   */
+  private formatDescription(description: string): string {
+    return description
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .join("<br>");
+  }
 
-    /**
-     * Escape HTML content
-     */
-    private escapeHtml(text: string): string {
-        const map: Record<string, string> = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, (m) => map[m]);
-    }
+  /**
+   * Escape HTML content
+   */
+  private escapeHtml(text: string): string {
+    const map: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return text.replace(/[&<>"']/g, (m) => map[m]);
+  }
 
-    /**
-     * Dispose of resources
-     */
-    dispose(): void {
-        this.disposables.forEach(d => d.dispose());
-        this.disposables = [];
-    }
+  /**
+   * Dispose of resources
+   */
+  dispose(): void {
+    this.disposables.forEach((d) => d.dispose());
+    this.disposables = [];
+  }
 }

@@ -1,7 +1,12 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
-import * as vscode from 'vscode';
-import { AuthenticationService } from '../services/AuthenticationService';
-import { ConfigurationService } from '../services/ConfigurationService';
+import axios, {
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  AxiosError,
+} from "axios";
+import * as vscode from "vscode";
+import { AuthenticationService } from "../services/AuthenticationService";
+import { ConfigurationService } from "../services/ConfigurationService";
 import {
   PullRequest,
   CommentThread,
@@ -12,8 +17,8 @@ import {
   ApiErrorResponse,
   PolicyEvaluationRecord,
   GitPullRequestIteration,
-  Identity
-} from './models';
+  Identity,
+} from "./models";
 
 /**
  * Rate limiting configuration
@@ -66,14 +71,14 @@ export interface ApiRequestOptions {
  * API Version: v7.1-preview.1
  */
 export class AzureDevOpsApiClient {
-  private static readonly API_VERSION = '7.1-preview.1';
-  private static readonly USER_AGENT = 'Azure-DevOps-PR-Reviewer-VSCode/1.0.0';
+  private static readonly API_VERSION = "7.1-preview.1";
+  private static readonly USER_AGENT = "Azure-DevOps-PR-Reviewer-VSCode/1.0.0";
 
   private static readonly RATE_LIMIT: RateLimitConfig = {
     maxRequests: 200,
     windowMs: 60000, // 1 minute
     retryAfterMs: 60000, // 1 minute
-    maxRetries: 3
+    maxRetries: 3,
   };
 
   private static readonly DEFAULT_TIMEOUT = 30000; // 30 seconds
@@ -101,21 +106,23 @@ export class AzureDevOpsApiClient {
    * @param options Request options including caching preferences
    * @returns Promise resolving to array of repositories
    */
-  async getRepositories(options: ApiRequestOptions = {}): Promise<GitRepository[]> {
+  async getRepositories(
+    options: ApiRequestOptions = {}
+  ): Promise<GitRepository[]> {
     const config = this.configService.getConfiguration();
     if (!config.project) {
-      throw new Error('Project not configured');
+      throw new Error("Project not configured");
     }
 
     const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories`;
     const response = await this.get<ApiResponse<GitRepository>>(url, options);
 
-    return response.value.map(repo => ({
+    return response.value.map((repo) => ({
       ...repo,
       project: {
         ...repo.project,
-        lastUpdateTime: new Date(repo.project.lastUpdateTime)
-      }
+        lastUpdateTime: new Date(repo.project.lastUpdateTime),
+      },
     }));
   }
 
@@ -140,7 +147,7 @@ export class AzureDevOpsApiClient {
       params.push(`searchCriteria.status=${status}`);
     }
     if (params.length > 0) {
-      url += `?${params.join('&')}`;
+      url += `?${params.join("&")}`;
     }
 
     const response = await this.get<ApiResponse<PullRequest>>(url, options);
@@ -186,16 +193,24 @@ export class AzureDevOpsApiClient {
 
     const response = await this.get<ApiResponse<CommentThread>>(url, options);
 
-    return response.value.map(thread => ({
+    return response.value.map((thread) => ({
       ...thread,
-      publishedDate: thread.publishedDate ? new Date(thread.publishedDate) : undefined,
-      lastUpdatedDate: thread.lastUpdatedDate ? new Date(thread.lastUpdatedDate) : undefined,
-      comments: thread.comments.map(comment => ({
+      publishedDate: thread.publishedDate
+        ? new Date(thread.publishedDate)
+        : undefined,
+      lastUpdatedDate: thread.lastUpdatedDate
+        ? new Date(thread.lastUpdatedDate)
+        : undefined,
+      comments: thread.comments.map((comment) => ({
         ...comment,
         publishedDate: new Date(comment.publishedDate),
-        lastUpdatedDate: comment.lastUpdatedDate ? new Date(comment.lastUpdatedDate) : undefined,
-        lastContentUpdatedDate: comment.lastContentUpdatedDate ? new Date(comment.lastContentUpdatedDate) : undefined
-      }))
+        lastUpdatedDate: comment.lastUpdatedDate
+          ? new Date(comment.lastUpdatedDate)
+          : undefined,
+        lastContentUpdatedDate: comment.lastContentUpdatedDate
+          ? new Date(comment.lastContentUpdatedDate)
+          : undefined,
+      })),
     }));
   }
 
@@ -221,32 +236,38 @@ export class AzureDevOpsApiClient {
       const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${repositoryId}/pullrequests/${pullRequestId}/threads/${threadId}/comments`;
       const payload = {
         content: comment,
-        commentType: 'text'
+        commentType: "text",
       };
 
       const response = await this.post<Comment>(url, payload);
       return {
         ...response,
         publishedDate: new Date(response.publishedDate),
-        lastUpdatedDate: response.lastUpdatedDate ? new Date(response.lastUpdatedDate) : undefined,
-        lastContentUpdatedDate: response.lastContentUpdatedDate ? new Date(response.lastContentUpdatedDate) : undefined
+        lastUpdatedDate: response.lastUpdatedDate
+          ? new Date(response.lastUpdatedDate)
+          : undefined,
+        lastContentUpdatedDate: response.lastContentUpdatedDate
+          ? new Date(response.lastContentUpdatedDate)
+          : undefined,
       };
     } else {
       // Create new thread
       const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${repositoryId}/pullrequests/${pullRequestId}/threads`;
       const payload = {
-        comments: [{
-          content: comment,
-          commentType: 'text'
-        }],
-        status: 'active'
+        comments: [
+          {
+            content: comment,
+            commentType: "text",
+          },
+        ],
+        status: "active",
       };
 
       const thread = await this.post<CommentThread>(url, payload);
       if (thread.comments.length > 0) {
         return thread.comments[0];
       }
-      throw new Error('No comment created in thread');
+      throw new Error("No comment created in thread");
     }
   }
 
@@ -267,13 +288,56 @@ export class AzureDevOpsApiClient {
     const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${repositoryId}/pullrequests/${pullRequestId}/reviewers/@me`;
 
     const payload = {
-      vote: vote
+      vote: vote,
     };
 
     await this.put<any>(url, payload);
 
     // Invalidate cache for this PR
     this.invalidateCache(`pr_${repositoryId}_${pullRequestId}`);
+  }
+
+  /**
+   * Get pull request files with pagination support for large PRs
+   *
+   * @param repositoryId Repository ID
+   * @param pullRequestId Pull request ID
+   * @param iterationId Iteration ID (use latest if not specified)
+   * @param skip Number of files to skip (pagination)
+   * @param top Maximum number of files to return (pagination)
+   * @returns Promise resolving to paginated files response
+   */
+  async getPullRequestFiles(
+    repositoryId: string,
+    pullRequestId: number,
+    iterationId?: number,
+    skip = 0,
+    top = 50
+  ): Promise<{
+    value: any[];
+    count: number;
+  }> {
+    const config = this.configService.getConfiguration();
+    let url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${repositoryId}/pullrequests/${pullRequestId}/files`;
+
+    const params: string[] = [];
+    if (iterationId) {
+      params.push(`iterationId=${iterationId}`);
+    }
+    params.push(`$skip=${skip}`);
+    params.push(`$top=${top}`);
+    params.push("$includeContent=false"); // Don't include file content for performance
+
+    if (params.length > 0) {
+      url += `?${params.join("&")}`;
+    }
+
+    const response = await this.get<any>(url, { useCache: false }); // Don't cache file listings
+
+    return {
+      value: response.value || [],
+      count: response.count || 0,
+    };
   }
 
   /**
@@ -291,7 +355,7 @@ export class AzureDevOpsApiClient {
     const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${repositoryId}/pullrequests/${pullRequestId}`;
 
     const payload = {
-      status: 'abandoned'
+      status: "abandoned",
     };
 
     await this.patch<any>(url, payload);
@@ -307,8 +371,10 @@ export class AzureDevOpsApiClient {
   clearCache(): void {
     this.memoryCache.clear();
     // Clear session storage cache entries
-    const keys = this.context.workspaceState.keys().filter(key => key.startsWith('api_cache_'));
-    keys.forEach(key => this.sessionStorage.update(key, undefined));
+    const keys = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("api_cache_"));
+    keys.forEach((key) => this.sessionStorage.update(key, undefined));
   }
 
   /**
@@ -316,12 +382,18 @@ export class AzureDevOpsApiClient {
    *
    * @returns Cache statistics object
    */
-  getCacheStats(): { memoryEntries: number; sessionEntries: number; hitRate?: number } {
-    const sessionEntries = this.context.workspaceState.keys().filter(key => key.startsWith('api_cache_')).length;
+  getCacheStats(): {
+    memoryEntries: number;
+    sessionEntries: number;
+    hitRate?: number;
+  } {
+    const sessionEntries = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("api_cache_")).length;
 
     return {
       memoryEntries: this.memoryCache.size,
-      sessionEntries: sessionEntries
+      sessionEntries: sessionEntries,
     };
   }
 
@@ -334,10 +406,10 @@ export class AzureDevOpsApiClient {
     const instance = axios.create({
       timeout: AzureDevOpsApiClient.DEFAULT_TIMEOUT,
       headers: {
-        'User-Agent': AzureDevOpsApiClient.USER_AGENT,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      }
+        "User-Agent": AzureDevOpsApiClient.USER_AGENT,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
     });
 
     return instance;
@@ -352,12 +424,12 @@ export class AzureDevOpsApiClient {
         // Add authentication header
         const authHeader = await this.authService.getAuthHeader();
         if (authHeader) {
-          config.headers['Authorization'] = authHeader;
+          config.headers["Authorization"] = authHeader;
         }
 
         // Add API version
         if (config.url) {
-          const separator = config.url.includes('?') ? '&' : '?';
+          const separator = config.url.includes("?") ? "&" : "?";
           config.url += `${separator}api-version=${AzureDevOpsApiClient.API_VERSION}`;
         }
 
@@ -381,8 +453,10 @@ export class AzureDevOpsApiClient {
 
         // Handle rate limiting
         if (error.response?.status === 429) {
-          const retryAfter = error.response.headers['retry-after'];
-          const delay = retryAfter ? parseInt(retryAfter) * 1000 : AzureDevOpsApiClient.RATE_LIMIT.retryAfterMs;
+          const retryAfter = error.response.headers["retry-after"];
+          const delay = retryAfter
+            ? parseInt(retryAfter) * 1000
+            : AzureDevOpsApiClient.RATE_LIMIT.retryAfterMs;
 
           if (!config._retryCount) {
             config._retryCount = 0;
@@ -397,21 +471,27 @@ export class AzureDevOpsApiClient {
 
         // Handle authentication errors
         if (error.response?.status === 401 || error.response?.status === 403) {
-          throw new Error('Authentication failed. Please check your Personal Access Token.');
+          throw new Error(
+            "Authentication failed. Please check your Personal Access Token."
+          );
         }
 
         // Handle other HTTP errors without exposing sensitive data
         if (error.response) {
           const apiError = error.response.data as ApiErrorResponse;
-          throw new Error(apiError.message || `API error: ${error.response.status}`);
+          throw new Error(
+            apiError.message || `API error: ${error.response.status}`
+          );
         }
 
         // Handle network errors
-        if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-          throw new Error('Unable to connect to Azure DevOps. Please check your network connection.');
+        if (error.code === "ENOTFOUND" || error.code === "ECONNREFUSED") {
+          throw new Error(
+            "Unable to connect to Azure DevOps. Please check your network connection."
+          );
         }
 
-        throw new Error('Request failed. Please try again.');
+        throw new Error("Request failed. Please try again.");
       }
     );
   }
@@ -419,8 +499,11 @@ export class AzureDevOpsApiClient {
   /**
    * Generic GET request with caching support
    */
-  public async get<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
-    const cacheKey = this.getCacheKey('GET', url);
+  public async get<T>(
+    url: string,
+    options: ApiRequestOptions = {}
+  ): Promise<T> {
+    const cacheKey = this.getCacheKey("GET", url);
 
     // Check cache if enabled
     if (options.useCache !== false) {
@@ -431,14 +514,18 @@ export class AzureDevOpsApiClient {
     }
 
     const config: AxiosRequestConfig = {
-      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
+      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT,
     };
 
     const response = await this.axiosInstance.get<T>(url, config);
 
     // Cache response if enabled
     if (options.useCache !== false) {
-      this.setCache(cacheKey, response.data, options.cacheTtl || AzureDevOpsApiClient.DEFAULT_CACHE_TTL);
+      this.setCache(
+        cacheKey,
+        response.data,
+        options.cacheTtl || AzureDevOpsApiClient.DEFAULT_CACHE_TTL
+      );
     }
 
     return response.data;
@@ -447,9 +534,13 @@ export class AzureDevOpsApiClient {
   /**
    * Generic POST request
    */
-  public async post<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
+  public async post<T>(
+    url: string,
+    data: any,
+    options: ApiRequestOptions = {}
+  ): Promise<T> {
     const config: AxiosRequestConfig = {
-      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
+      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT,
     };
 
     const response = await this.axiosInstance.post<T>(url, data, config);
@@ -459,9 +550,13 @@ export class AzureDevOpsApiClient {
   /**
    * Generic PUT request
    */
-  public async put<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
+  public async put<T>(
+    url: string,
+    data: any,
+    options: ApiRequestOptions = {}
+  ): Promise<T> {
     const config: AxiosRequestConfig = {
-      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
+      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT,
     };
 
     const response = await this.axiosInstance.put<T>(url, data, config);
@@ -471,9 +566,13 @@ export class AzureDevOpsApiClient {
   /**
    * Generic PATCH request
    */
-  public async patch<T>(url: string, data: any, options: ApiRequestOptions = {}): Promise<T> {
+  public async patch<T>(
+    url: string,
+    data: any,
+    options: ApiRequestOptions = {}
+  ): Promise<T> {
     const config: AxiosRequestConfig = {
-      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
+      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT,
     };
 
     const response = await this.axiosInstance.patch<T>(url, data, config);
@@ -483,9 +582,12 @@ export class AzureDevOpsApiClient {
   /**
    * Generic DELETE request
    */
-  public async delete<T>(url: string, options: ApiRequestOptions = {}): Promise<T> {
+  public async delete<T>(
+    url: string,
+    options: ApiRequestOptions = {}
+  ): Promise<T> {
     const config: AxiosRequestConfig = {
-      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT
+      timeout: options.timeout || AzureDevOpsApiClient.DEFAULT_TIMEOUT,
     };
 
     const response = await this.axiosInstance.delete<T>(url, config);
@@ -500,13 +602,22 @@ export class AzureDevOpsApiClient {
     const windowStart = now - AzureDevOpsApiClient.RATE_LIMIT.windowMs;
 
     // Remove old entries
-    while (this.rateLimitTracker.length > 0 && this.rateLimitTracker[0] < windowStart) {
+    while (
+      this.rateLimitTracker.length > 0 &&
+      this.rateLimitTracker[0] < windowStart
+    ) {
       this.rateLimitTracker.shift();
     }
 
     // Check if we're at the limit
-    if (this.rateLimitTracker.length >= AzureDevOpsApiClient.RATE_LIMIT.maxRequests) {
-      const delay = this.rateLimitTracker[0] + AzureDevOpsApiClient.RATE_LIMIT.windowMs - now;
+    if (
+      this.rateLimitTracker.length >=
+      AzureDevOpsApiClient.RATE_LIMIT.maxRequests
+    ) {
+      const delay =
+        this.rateLimitTracker[0] +
+        AzureDevOpsApiClient.RATE_LIMIT.windowMs -
+        now;
       if (delay > 0) {
         await this.delay(delay);
       }
@@ -520,7 +631,7 @@ export class AzureDevOpsApiClient {
    * Generate cache key for request
    */
   private getCacheKey(method: string, url: string): string {
-    return `${method}_${Buffer.from(url).toString('base64')}`;
+    return `${method}_${Buffer.from(url).toString("base64")}`;
   }
 
   /**
@@ -551,7 +662,7 @@ export class AzureDevOpsApiClient {
   private setCache<T>(key: string, data: T, ttl: number): void {
     const entry: CacheEntry<T> = {
       data,
-      expiry: Date.now() + ttl
+      expiry: Date.now() + ttl,
     };
 
     // Set in memory cache
@@ -574,10 +685,10 @@ export class AzureDevOpsApiClient {
     }
 
     // Invalidate session storage
-    const sessionKeys = this.context.workspaceState.keys().filter(key =>
-      key.startsWith('api_cache_') && key.includes(pattern)
-    );
-    sessionKeys.forEach(key => this.sessionStorage.update(key, undefined));
+    const sessionKeys = this.context.workspaceState
+      .keys()
+      .filter((key) => key.startsWith("api_cache_") && key.includes(pattern));
+    sessionKeys.forEach((key) => this.sessionStorage.update(key, undefined));
   }
 
   /**
@@ -592,42 +703,44 @@ export class AzureDevOpsApiClient {
         ...pr.lastMergeSourceCommit,
         author: {
           ...pr.lastMergeSourceCommit.author,
-          date: new Date(pr.lastMergeSourceCommit.author.date)
+          date: new Date(pr.lastMergeSourceCommit.author.date),
         },
         committer: {
           ...pr.lastMergeSourceCommit.committer,
-          date: new Date(pr.lastMergeSourceCommit.committer.date)
-        }
+          date: new Date(pr.lastMergeSourceCommit.committer.date),
+        },
       },
       lastMergeTargetCommit: {
         ...pr.lastMergeTargetCommit,
         author: {
           ...pr.lastMergeTargetCommit.author,
-          date: new Date(pr.lastMergeTargetCommit.author.date)
+          date: new Date(pr.lastMergeTargetCommit.author.date),
         },
         committer: {
           ...pr.lastMergeTargetCommit.committer,
-          date: new Date(pr.lastMergeTargetCommit.committer.date)
-        }
-      },
-      lastMergeCommit: pr.lastMergeCommit ? {
-        ...pr.lastMergeCommit,
-        author: {
-          ...pr.lastMergeCommit.author,
-          date: new Date(pr.lastMergeCommit.author.date)
+          date: new Date(pr.lastMergeTargetCommit.committer.date),
         },
-        committer: {
-          ...pr.lastMergeCommit.committer,
-          date: new Date(pr.lastMergeCommit.committer.date)
-        }
-      } : undefined,
+      },
+      lastMergeCommit: pr.lastMergeCommit
+        ? {
+            ...pr.lastMergeCommit,
+            author: {
+              ...pr.lastMergeCommit.author,
+              date: new Date(pr.lastMergeCommit.author.date),
+            },
+            committer: {
+              ...pr.lastMergeCommit.committer,
+              date: new Date(pr.lastMergeCommit.committer.date),
+            },
+          }
+        : undefined,
       repository: {
         ...pr.repository,
         project: {
           ...pr.repository.project,
-          lastUpdateTime: new Date(pr.repository.project.lastUpdateTime)
-        }
-      }
+          lastUpdateTime: new Date(pr.repository.project.lastUpdateTime),
+        },
+      },
     };
   }
 
@@ -635,6 +748,6 @@ export class AzureDevOpsApiClient {
    * Delay execution for specified milliseconds
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

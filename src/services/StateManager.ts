@@ -1,21 +1,26 @@
-import * as vscode from 'vscode';
-import { PullRequest, GitRepository, CommentThread, Identity } from '../api/models';
+import * as vscode from "vscode";
+import {
+  PullRequest,
+  GitRepository,
+  CommentThread,
+  Identity,
+} from "../api/models";
 
 /**
  * State update event type
  */
 export type StateUpdateEventType =
-  | 'pullRequestsLoaded'
-  | 'pullRequestUpdated'
-  | 'pullRequestCreated'
-  | 'pullRequestAbandoned'
-  | 'commentsLoaded'
-  | 'commentAdded'
-  | 'commentUpdated'
-  | 'repositoriesLoaded'
-  | 'configurationChanged'
-  | 'userAuthenticated'
-  | 'userSignedOut';
+  | "pullRequestsLoaded"
+  | "pullRequestUpdated"
+  | "pullRequestCreated"
+  | "pullRequestAbandoned"
+  | "commentsLoaded"
+  | "commentAdded"
+  | "commentUpdated"
+  | "repositoriesLoaded"
+  | "configurationChanged"
+  | "userAuthenticated"
+  | "userSignedOut";
 
 /**
  * State update event
@@ -47,8 +52,8 @@ export interface AppState {
  */
 export interface ViewState {
   readonly activePullRequestFilter: string;
-  readonly sortBy: 'createdDate' | 'updatedDate' | 'title' | 'voteCount';
-  readonly sortOrder: 'asc' | 'desc';
+  readonly sortBy: "createdDate" | "updatedDate" | "title" | "voteCount";
+  readonly sortOrder: "asc" | "desc";
   readonly showDrafts: boolean;
   readonly showActive: boolean;
   readonly showCompleted: boolean;
@@ -91,10 +96,10 @@ export class StateManager {
   private readonly pendingUpdates = new Map<string, any>();
   private readonly batchUpdateTimeouts = new Map<string, NodeJS.Timeout>();
   private readonly persistKeys = {
-    pullRequests: 'state_pull_requests',
-    repositories: 'state_repositories',
-    viewState: 'state_view_state',
-    lastUpdated: 'state_last_updated'
+    pullRequests: "state_pull_requests",
+    repositories: "state_repositories",
+    viewState: "state_view_state",
+    lastUpdated: "state_last_updated",
   };
 
   constructor(private readonly context: vscode.ExtensionContext) {
@@ -131,12 +136,12 @@ export class StateManager {
       newMap.set(key, pr);
     }
 
-    this.mutateState('pullRequests', newMap, options);
+    this.mutateState("pullRequests", newMap, options);
 
     this.notifyStateUpdate({
-      type: 'pullRequestsLoaded',
+      type: "pullRequestsLoaded",
       data: { count: pullRequests.length },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -160,12 +165,12 @@ export class StateManager {
     const newMap = new Map(this.state.pullRequests);
     newMap.set(key, updatedPr);
 
-    this.mutateState('pullRequests', newMap, options);
+    this.mutateState("pullRequests", newMap, options);
 
     this.notifyStateUpdate({
-      type: 'pullRequestUpdated',
+      type: "pullRequestUpdated",
       data: { repositoryId, pullRequestId },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -180,12 +185,12 @@ export class StateManager {
     const newMap = new Map(this.state.pullRequests);
     newMap.set(key, pullRequest);
 
-    this.mutateState('pullRequests', newMap, options);
+    this.mutateState("pullRequests", newMap, options);
 
     this.notifyStateUpdate({
-      type: 'pullRequestCreated',
+      type: "pullRequestCreated",
       data: { pullRequest },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -201,12 +206,12 @@ export class StateManager {
     const newMap = new Map(this.state.pullRequests);
     newMap.delete(key);
 
-    this.mutateState('pullRequests', newMap, options);
+    this.mutateState("pullRequests", newMap, options);
 
     this.notifyStateUpdate({
-      type: 'pullRequestAbandoned',
+      type: "pullRequestAbandoned",
       data: { repositoryId, pullRequestId },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -223,12 +228,12 @@ export class StateManager {
       newMap.set(repo.id, repo);
     }
 
-    this.mutateState('repositories', newMap, options);
+    this.mutateState("repositories", newMap, options);
 
     this.notifyStateUpdate({
-      type: 'repositoriesLoaded',
+      type: "repositoriesLoaded",
       data: { count: repositories.length },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -245,12 +250,12 @@ export class StateManager {
     const newMap = new Map(this.state.commentThreads);
     newMap.set(key, threads);
 
-    this.mutateState('commentThreads', newMap, options);
+    this.mutateState("commentThreads", newMap, options);
 
     this.notifyStateUpdate({
-      type: 'commentsLoaded',
+      type: "commentsLoaded",
       data: { repositoryId, pullRequestId, count: threads.length },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -261,12 +266,12 @@ export class StateManager {
     user: Identity | null,
     options: StateMutationOptions = { persist: false, notify: true }
   ): void {
-    this.mutateState('currentUser', user, options);
+    this.mutateState("currentUser", user, options);
 
     this.notifyStateUpdate({
-      type: user ? 'userAuthenticated' : 'userSignedOut',
+      type: user ? "userAuthenticated" : "userSignedOut",
       data: user ? { userId: user.id } : null,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -277,7 +282,7 @@ export class StateManager {
     pullRequest: PullRequest | null,
     options: StateMutationOptions = { persist: false, notify: true }
   ): void {
-    this.mutateState('selectedPullRequest', pullRequest, options);
+    this.mutateState("selectedPullRequest", pullRequest, options);
   }
 
   /**
@@ -287,7 +292,7 @@ export class StateManager {
     repository: GitRepository | null,
     options: StateMutationOptions = { persist: false, notify: true }
   ): void {
-    this.mutateState('selectedRepository', repository, options);
+    this.mutateState("selectedRepository", repository, options);
   }
 
   /**
@@ -301,7 +306,7 @@ export class StateManager {
       newMap.delete(operation);
     }
 
-    this.mutateState('loading', newMap);
+    this.mutateState("loading", newMap);
   }
 
   /**
@@ -315,20 +320,23 @@ export class StateManager {
       newMap.delete(operation);
     }
 
-    this.mutateState('errors', newMap);
+    this.mutateState("errors", newMap);
   }
 
   /**
    * Update view state
    */
-  updateViewState(updates: Partial<ViewState>, options: StateMutationOptions = { persist: true, notify: false }): void {
+  updateViewState(
+    updates: Partial<ViewState>,
+    options: StateMutationOptions = { persist: true, notify: false }
+  ): void {
     const newViewState = { ...this.state.viewState, ...updates };
-    this.mutateState('viewState', newViewState, options);
+    this.mutateState("viewState", newViewState, options);
 
     this.notifyStateUpdate({
-      type: 'configurationChanged',
+      type: "configurationChanged",
       data: { viewState: newViewState },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -357,14 +365,18 @@ export class StateManager {
    * Toggle sidebar visibility
    */
   toggleSidebar(): void {
-    this.updateViewState({ sidebarVisible: !this.state.viewState.sidebarVisible });
+    this.updateViewState({
+      sidebarVisible: !this.state.viewState.sidebarVisible,
+    });
   }
 
   /**
    * Toggle detail view visibility
    */
   toggleDetailView(): void {
-    this.updateViewState({ detailViewVisible: !this.state.viewState.detailViewVisible });
+    this.updateViewState({
+      detailViewVisible: !this.state.viewState.detailViewVisible,
+    });
   }
 
   /**
@@ -383,7 +395,10 @@ export class StateManager {
   /**
    * Get comment threads for a specific pull request
    */
-  getCommentThreadsForPullRequest(repositoryId: string, pullRequestId: number): CommentThread[] {
+  getCommentThreadsForPullRequest(
+    repositoryId: string,
+    pullRequestId: number
+  ): CommentThread[] {
     const key = `${repositoryId}_${pullRequestId}`;
     return this.state.commentThreads.get(key) || [];
   }
@@ -419,7 +434,10 @@ export class StateManager {
   /**
    * Batch multiple state updates together
    */
-  batchUpdate(updates: Array<() => void>, options: StateMutationOptions = { persist: true, notify: true }): void {
+  batchUpdate(
+    updates: Array<() => void>,
+    options: StateMutationOptions = { persist: true, notify: true }
+  ): void {
     // Save current state for potential rollback
     if (this.stateHistory.length === 0 || options.persist) {
       this.saveToHistory();
@@ -438,9 +456,9 @@ export class StateManager {
     // Notify listeners if requested
     if (options.notify) {
       this.notifyStateUpdate({
-        type: 'configurationChanged',
+        type: "configurationChanged",
         data: { batchUpdate: true },
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     }
   }
@@ -463,9 +481,9 @@ export class StateManager {
     // Persist and notify
     this.persistState();
     this.notifyStateUpdate({
-      type: 'configurationChanged',
+      type: "configurationChanged",
       data: { undo: true },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     return true;
@@ -480,10 +498,17 @@ export class StateManager {
     this.clearPersistedState();
 
     this.notifyStateUpdate({
-      type: 'configurationChanged',
+      type: "configurationChanged",
       data: { clearState: true },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
+  }
+
+  /**
+   * Get all repositories from state
+   */
+  getRepositories(): Map<string, GitRepository> {
+    return this.state.repositories;
   }
 
   /**
@@ -498,8 +523,9 @@ export class StateManager {
   } {
     const pullRequestCount = this.state.pullRequests.size;
     const repositoryCount = this.state.repositories.size;
-    const commentThreadCount = Array.from(this.state.commentThreads.values())
-      .reduce((sum, threads) => sum + threads.length, 0);
+    const commentThreadCount = Array.from(
+      this.state.commentThreads.values()
+    ).reduce((sum, threads) => sum + threads.length, 0);
     const memoryUsage = JSON.stringify(this.state).length;
     const historySize = this.stateHistory.length;
 
@@ -508,7 +534,7 @@ export class StateManager {
       repositoryCount,
       commentThreadCount,
       memoryUsage,
-      historySize
+      historySize,
     };
   }
 
@@ -542,9 +568,9 @@ export class StateManager {
       errors: new Map(),
       lastUpdated: new Map(),
       viewState: {
-        activePullRequestFilter: 'all',
-        sortBy: 'updatedDate',
-        sortOrder: 'desc',
+        activePullRequestFilter: "all",
+        sortBy: "updatedDate",
+        sortOrder: "desc",
         showDrafts: true,
         showActive: true,
         showCompleted: true,
@@ -552,8 +578,8 @@ export class StateManager {
         expandedThreads: new Set(),
         selectedCommentThread: null,
         sidebarVisible: true,
-        detailViewVisible: false
-      }
+        detailViewVisible: false,
+      },
     };
   }
 
@@ -570,7 +596,7 @@ export class StateManager {
     if (Array.isArray(data)) {
       return [...data] as T;
     }
-    if (typeof data === 'object' && data !== null) {
+    if (typeof data === "object" && data !== null) {
       return { ...data } as T;
     }
     return data;
@@ -609,7 +635,7 @@ export class StateManager {
       try {
         listener(event);
       } catch (error) {
-        console.error('Error in state update listener:', error);
+        console.error("Error in state update listener:", error);
       }
     }
   }
@@ -632,31 +658,47 @@ export class StateManager {
   private persistState(): void {
     try {
       // Persist pull requests (minimal data)
-      const pullRequestsData = Array.from(this.state.pullRequests.entries())
-        .map(([key, pr]) => [key, {
+      const pullRequestsData = Array.from(
+        this.state.pullRequests.entries()
+      ).map(([key, pr]) => [
+        key,
+        {
           pullRequestId: pr.pullRequestId,
           repositoryId: pr.repository.id,
           title: pr.title,
           status: pr.status,
-          creationDate: pr.creationDate.toISOString()
-        }]);
+          creationDate: pr.creationDate.toISOString(),
+        },
+      ]);
 
-      this.context.workspaceState.update(this.persistKeys.pullRequests, pullRequestsData);
+      this.context.workspaceState.update(
+        this.persistKeys.pullRequests,
+        pullRequestsData
+      );
 
       // Persist repositories
       const repositoriesData = Array.from(this.state.repositories.entries());
-      this.context.workspaceState.update(this.persistKeys.repositories, repositoriesData);
+      this.context.workspaceState.update(
+        this.persistKeys.repositories,
+        repositoriesData
+      );
 
       // Persist view state
-      this.context.workspaceState.update(this.persistKeys.viewState, this.state.viewState);
+      this.context.workspaceState.update(
+        this.persistKeys.viewState,
+        this.state.viewState
+      );
 
       // Persist last updated timestamps
-      const lastUpdatedData = Array.from(this.state.lastUpdated.entries())
-        .map(([key, date]) => [key, date.toISOString()]);
-      this.context.workspaceState.update(this.persistKeys.lastUpdated, lastUpdatedData);
-
+      const lastUpdatedData = Array.from(this.state.lastUpdated.entries()).map(
+        ([key, date]) => [key, date.toISOString()]
+      );
+      this.context.workspaceState.update(
+        this.persistKeys.lastUpdated,
+        lastUpdatedData
+      );
     } catch (error) {
-      console.error('Failed to persist state:', error);
+      console.error("Failed to persist state:", error);
     }
   }
 
@@ -666,31 +708,36 @@ export class StateManager {
   private loadPersistedState(): void {
     try {
       // Load repositories
-      const repositoriesData = this.context.workspaceState.get<[string, GitRepository][]>(this.persistKeys.repositories);
+      const repositoriesData = this.context.workspaceState.get<
+        [string, GitRepository][]
+      >(this.persistKeys.repositories);
       if (repositoriesData) {
         this.state.repositories = new Map(repositoriesData);
       }
 
       // Load view state
-      const viewStateData = this.context.workspaceState.get<ViewState>(this.persistKeys.viewState);
+      const viewStateData = this.context.workspaceState.get<ViewState>(
+        this.persistKeys.viewState
+      );
       if (viewStateData) {
         this.state.viewState = {
           ...this.state.viewState,
           ...viewStateData,
-          expandedThreads: new Set(viewStateData.expandedThreads || [])
+          expandedThreads: new Set(viewStateData.expandedThreads || []),
         };
       }
 
       // Load last updated timestamps
-      const lastUpdatedData = this.context.workspaceState.get<[string, string][]>(this.persistKeys.lastUpdated);
+      const lastUpdatedData = this.context.workspaceState.get<
+        [string, string][]
+      >(this.persistKeys.lastUpdated);
       if (lastUpdatedData) {
         this.state.lastUpdated = new Map(
           lastUpdatedData.map(([key, dateStr]) => [key, new Date(dateStr)])
         );
       }
-
     } catch (error) {
-      console.error('Failed to load persisted state:', error);
+      console.error("Failed to load persisted state:", error);
     }
   }
 
@@ -702,7 +749,7 @@ export class StateManager {
       this.persistKeys.pullRequests,
       this.persistKeys.repositories,
       this.persistKeys.viewState,
-      this.persistKeys.lastUpdated
+      this.persistKeys.lastUpdated,
     ];
 
     for (const key of keys) {
@@ -716,7 +763,7 @@ export class StateManager {
   private setupAutoCleanup(): void {
     // Cleanup on extension deactivation
     this.context.subscriptions.push({
-      dispose: () => this.dispose()
+      dispose: () => this.dispose(),
     });
 
     // Auto-cleanup old history periodically

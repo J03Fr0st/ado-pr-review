@@ -1,6 +1,6 @@
-import * as vscode from 'vscode';
-import { AzureDevOpsApiClient } from '../api/AzureDevOpsApiClient';
-import { ConfigurationService } from './ConfigurationService';
+import * as vscode from "vscode";
+import { AzureDevOpsApiClient } from "../api/AzureDevOpsApiClient";
+import { ConfigurationService } from "./ConfigurationService";
 import {
   PullRequest,
   PullRequestStatus,
@@ -11,8 +11,8 @@ import {
   Identity,
   GitPullRequestIteration,
   GitPullRequestChange,
-  PolicyEvaluationRecord
-} from '../api/models';
+  PolicyEvaluationRecord,
+} from "../api/models";
 
 /**
  * Pull request filter criteria
@@ -31,8 +31,8 @@ export interface PullRequestFilter {
  * Pull request sorting options
  */
 export interface PullRequestSortOptions {
-  readonly sortBy?: 'createdDate' | 'updatedDate' | 'title' | 'voteCount';
-  readonly sortOrder?: 'asc' | 'desc';
+  readonly sortBy?: "createdDate" | "updatedDate" | "title" | "voteCount";
+  readonly sortOrder?: "asc" | "desc";
 }
 
 /**
@@ -98,9 +98,12 @@ export interface BulkOperationResult {
  * - Error handling with detailed diagnostics
  */
 export class PullRequestService {
-  private readonly cacheKeyPrefix = 'pr_service_';
+  private readonly cacheKeyPrefix = "pr_service_";
   private readonly refreshIntervals = new Map<string, NodeJS.Timeout>();
-  private readonly bulkOperationQueue = new Map<string, Promise<BulkOperationResult>>();
+  private readonly bulkOperationQueue = new Map<
+    string,
+    Promise<BulkOperationResult>
+  >();
 
   constructor(
     private readonly apiClient: AzureDevOpsApiClient,
@@ -119,11 +122,12 @@ export class PullRequestService {
     filter: PullRequestFilter = {},
     sortOptions: PullRequestSortOptions = {}
   ): Promise<PullRequest[]> {
-    const cacheKey = this.getCacheKey('list', filter, sortOptions);
+    const cacheKey = this.getCacheKey("list", filter, sortOptions);
 
     // Use cached data if available and fresh
     const cached = this.getCachedData<PullRequest[]>(cacheKey);
-    if (cached && this.isCacheValid(cached.timestamp, 30000)) { // 30 second cache
+    if (cached && this.isCacheValid(cached.timestamp, 30000)) {
+      // 30 second cache
       return cached.data;
     }
 
@@ -159,7 +163,11 @@ export class PullRequestService {
     const sortedPrs = this.applySorting(allPullRequests, sortOptions);
 
     // Apply pagination
-    const paginatedPrs = this.applyPagination(sortedPrs, filter.skip || 0, filter.maxResults);
+    const paginatedPrs = this.applyPagination(
+      sortedPrs,
+      filter.skip || 0,
+      filter.maxResults
+    );
 
     // Cache the result
     this.setCacheData(cacheKey, paginatedPrs);
@@ -174,12 +182,16 @@ export class PullRequestService {
    * @param pullRequestId Pull request ID
    * @returns Promise resolving to pull request details
    */
-  async getPullRequest(repositoryId: string, pullRequestId: number): Promise<PullRequest | null> {
-    const cacheKey = this.getCacheKey('single', repositoryId, pullRequestId);
+  async getPullRequest(
+    repositoryId: string,
+    pullRequestId: number
+  ): Promise<PullRequest | null> {
+    const cacheKey = this.getCacheKey("single", repositoryId, pullRequestId);
 
     // Check cache first
     const cached = this.getCachedData<PullRequest>(cacheKey);
-    if (cached && this.isCacheValid(cached.timestamp, 60000)) { // 1 minute cache
+    if (cached && this.isCacheValid(cached.timestamp, 60000)) {
+      // 1 minute cache
       return cached.data;
     }
 
@@ -206,7 +218,9 @@ export class PullRequestService {
    * @param options Pull request creation options
    * @returns Promise resolving to operation result
    */
-  async createPullRequest(options: CreatePullRequestOptions): Promise<PullRequestOperationResult> {
+  async createPullRequest(
+    options: CreatePullRequestOptions
+  ): Promise<PullRequestOperationResult> {
     try {
       const config = this.configService.getConfiguration();
       const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${options.repositoryId}/pullrequests`;
@@ -214,11 +228,15 @@ export class PullRequestService {
       const payload = {
         title: options.title,
         description: options.description,
-        sourceRefName: options.sourceRefName.startsWith('refs/') ? options.sourceRefName : `refs/heads/${options.sourceRefName}`,
-        targetRefName: options.targetRefName.startsWith('refs/') ? options.targetRefName : `refs/heads/${options.targetRefName}`,
-        reviewers: options.reviewers?.map(id => ({ id })) || [],
-        workItemRefs: options.workItemRefs?.map(id => ({ id })) || [],
-        isDraft: options.isDraft || false
+        sourceRefName: options.sourceRefName.startsWith("refs/")
+          ? options.sourceRefName
+          : `refs/heads/${options.sourceRefName}`,
+        targetRefName: options.targetRefName.startsWith("refs/")
+          ? options.targetRefName
+          : `refs/heads/${options.targetRefName}`,
+        reviewers: options.reviewers?.map((id) => ({ id })) || [],
+        workItemRefs: options.workItemRefs?.map((id) => ({ id })) || [],
+        isDraft: options.isDraft || false,
       };
 
       const pullRequest = await this.apiClient.post<PullRequest>(url, payload);
@@ -229,13 +247,16 @@ export class PullRequestService {
       return {
         success: true,
         pullRequest,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to create pull request',
-        timestamp: new Date()
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to create pull request",
+        timestamp: new Date(),
       };
     }
   }
@@ -259,13 +280,16 @@ export class PullRequestService {
 
       const payload: any = {};
       if (options.title !== undefined) payload.title = options.title;
-      if (options.description !== undefined) payload.description = options.description;
+      if (options.description !== undefined)
+        payload.description = options.description;
       if (options.status !== undefined) payload.status = options.status;
       if (options.targetRefName !== undefined) {
-        payload.targetRefName = options.targetRefName.startsWith('refs/') ? options.targetRefName : `refs/heads/${options.targetRefName}`;
+        payload.targetRefName = options.targetRefName.startsWith("refs/")
+          ? options.targetRefName
+          : `refs/heads/${options.targetRefName}`;
       }
       if (options.workItemRefs !== undefined) {
-        payload.workItemRefs = options.workItemRefs.map(id => ({ id }));
+        payload.workItemRefs = options.workItemRefs.map((id) => ({ id }));
       }
 
       const pullRequest = await this.apiClient.patch<PullRequest>(url, payload);
@@ -277,13 +301,16 @@ export class PullRequestService {
       return {
         success: true,
         pullRequest,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to update pull request',
-        timestamp: new Date()
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update pull request",
+        timestamp: new Date(),
       };
     }
   }
@@ -295,7 +322,10 @@ export class PullRequestService {
    * @param pullRequestId Pull request ID
    * @returns Promise resolving to operation result
    */
-  async approvePullRequest(repositoryId: string, pullRequestId: number): Promise<PullRequestOperationResult> {
+  async approvePullRequest(
+    repositoryId: string,
+    pullRequestId: number
+  ): Promise<PullRequestOperationResult> {
     return this.votePullRequest(repositoryId, pullRequestId, 10); // 10 = approve
   }
 
@@ -326,13 +356,16 @@ export class PullRequestService {
 
       return {
         success: true,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to reject pull request',
-        timestamp: new Date()
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to reject pull request",
+        timestamp: new Date(),
       };
     }
   }
@@ -344,7 +377,10 @@ export class PullRequestService {
    * @param pullRequestId Pull request ID
    * @returns Promise resolving to operation result
    */
-  async abandonPullRequest(repositoryId: string, pullRequestId: number): Promise<PullRequestOperationResult> {
+  async abandonPullRequest(
+    repositoryId: string,
+    pullRequestId: number
+  ): Promise<PullRequestOperationResult> {
     try {
       await this.apiClient.abandonPullRequest(repositoryId, pullRequestId);
 
@@ -354,13 +390,16 @@ export class PullRequestService {
 
       return {
         success: true,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to abandon pull request',
-        timestamp: new Date()
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to abandon pull request",
+        timestamp: new Date(),
       };
     }
   }
@@ -377,7 +416,7 @@ export class PullRequestService {
     intervalMs: number,
     callback: (pullRequests: PullRequest[]) => void
   ): void {
-    const cacheKey = this.getCacheKey('autorefresh', filter);
+    const cacheKey = this.getCacheKey("autorefresh", filter);
 
     // Clear existing interval if any
     const existingInterval = this.refreshIntervals.get(cacheKey);
@@ -391,7 +430,7 @@ export class PullRequestService {
         const pullRequests = await this.getPullRequests(filter);
         callback(pullRequests);
       } catch (error) {
-        console.error('Auto-refresh failed:', error);
+        console.error("Auto-refresh failed:", error);
       }
     }, intervalMs);
 
@@ -407,7 +446,7 @@ export class PullRequestService {
    * @param filter Filter criteria
    */
   clearAutoRefresh(filter: PullRequestFilter): void {
-    const cacheKey = this.getCacheKey('autorefresh', filter);
+    const cacheKey = this.getCacheKey("autorefresh", filter);
     const interval = this.refreshIntervals.get(cacheKey);
 
     if (interval) {
@@ -432,14 +471,20 @@ export class PullRequestService {
     const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${repositoryId}/pullrequests/${pullRequestId}/iterations`;
 
     try {
-      const response = await this.apiClient.get<any>(url, { useCache: true, cacheTtl: 30000 });
+      const response = await this.apiClient.get<any>(url, {
+        useCache: true,
+        cacheTtl: 30000,
+      });
       return response.value.map((iteration: any) => ({
         ...iteration,
         createdDate: new Date(iteration.createdDate),
-        updatedDate: new Date(iteration.updatedDate)
+        updatedDate: new Date(iteration.updatedDate),
       }));
     } catch (error) {
-      console.error(`Failed to fetch iterations for PR ${pullRequestId}:`, error);
+      console.error(
+        `Failed to fetch iterations for PR ${pullRequestId}:`,
+        error
+      );
       return [];
     }
   }
@@ -465,7 +510,10 @@ export class PullRequestService {
     }
 
     try {
-      const response = await this.apiClient.get<any>(url, { useCache: true, cacheTtl: 60000 });
+      const response = await this.apiClient.get<any>(url, {
+        useCache: true,
+        cacheTtl: 60000,
+      });
       return response.value;
     } catch (error) {
       console.error(`Failed to fetch changes for PR ${pullRequestId}:`, error);
@@ -488,14 +536,22 @@ export class PullRequestService {
     const url = `${config.organizationUrl}/${config.project}/_apis/git/repositories/${repositoryId}/pullrequests/${pullRequestId}/policyevaluations`;
 
     try {
-      const response = await this.apiClient.get<any>(url, { useCache: true, cacheTtl: 30000 });
+      const response = await this.apiClient.get<any>(url, {
+        useCache: true,
+        cacheTtl: 30000,
+      });
       return response.value.map((record: any) => ({
         ...record,
         startedDate: new Date(record.startedDate),
-        completedDate: record.completedDate ? new Date(record.completedDate) : undefined
+        completedDate: record.completedDate
+          ? new Date(record.completedDate)
+          : undefined,
       }));
     } catch (error) {
-      console.error(`Failed to fetch policy evaluations for PR ${pullRequestId}:`, error);
+      console.error(
+        `Failed to fetch policy evaluations for PR ${pullRequestId}:`,
+        error
+      );
       return [];
     }
   }
@@ -517,24 +573,28 @@ export class PullRequestService {
   /**
    * Apply filters to pull requests
    */
-  private applyFilters(pullRequests: PullRequest[], filter: PullRequestFilter): PullRequest[] {
+  private applyFilters(
+    pullRequests: PullRequest[],
+    filter: PullRequestFilter
+  ): PullRequest[] {
     let filtered = [...pullRequests];
 
     if (filter.createdBy) {
-      filtered = filtered.filter(pr => pr.createdBy.id === filter.createdBy);
+      filtered = filtered.filter((pr) => pr.createdBy.id === filter.createdBy);
     }
 
     if (filter.reviewerId) {
-      filtered = filtered.filter(pr =>
-        pr.reviewers.some(reviewer => reviewer.id === filter.reviewerId)
+      filtered = filtered.filter((pr) =>
+        pr.reviewers.some((reviewer) => reviewer.id === filter.reviewerId)
       );
     }
 
     if (filter.searchQuery) {
       const query = filter.searchQuery.toLowerCase();
-      filtered = filtered.filter(pr =>
-        pr.title.toLowerCase().includes(query) ||
-        pr.description.toLowerCase().includes(query)
+      filtered = filtered.filter(
+        (pr) =>
+          pr.title.toLowerCase().includes(query) ||
+          pr.description.toLowerCase().includes(query)
       );
     }
 
@@ -544,32 +604,37 @@ export class PullRequestService {
   /**
    * Apply sorting to pull requests
    */
-  private applySorting(pullRequests: PullRequest[], sortOptions: PullRequestSortOptions): PullRequest[] {
+  private applySorting(
+    pullRequests: PullRequest[],
+    sortOptions: PullRequestSortOptions
+  ): PullRequest[] {
     const sorted = [...pullRequests];
-    const sortBy = sortOptions.sortBy || 'createdDate';
-    const sortOrder = sortOptions.sortOrder || 'desc';
+    const sortBy = sortOptions.sortBy || "createdDate";
+    const sortOrder = sortOptions.sortOrder || "desc";
 
     sorted.sort((a, b) => {
       let comparison = 0;
 
       switch (sortBy) {
-        case 'createdDate':
+        case "createdDate":
           comparison = a.creationDate.getTime() - b.creationDate.getTime();
           break;
-        case 'updatedDate':
-          comparison = (b.closedDate || b.creationDate).getTime() - (a.closedDate || a.creationDate).getTime();
+        case "updatedDate":
+          comparison =
+            (b.closedDate || b.creationDate).getTime() -
+            (a.closedDate || a.creationDate).getTime();
           break;
-        case 'title':
+        case "title":
           comparison = a.title.localeCompare(b.title);
           break;
-        case 'voteCount':
+        case "voteCount":
           const aVotes = a.reviewers.reduce((sum, r) => sum + r.vote, 0);
           const bVotes = b.reviewers.reduce((sum, r) => sum + r.vote, 0);
           comparison = aVotes - bVotes;
           break;
       }
 
-      return sortOrder === 'asc' ? comparison : -comparison;
+      return sortOrder === "asc" ? comparison : -comparison;
     });
 
     return sorted;
@@ -578,7 +643,11 @@ export class PullRequestService {
   /**
    * Apply pagination to pull requests
    */
-  private applyPagination(pullRequests: PullRequest[], skip: number, maxResults?: number): PullRequest[] {
+  private applyPagination(
+    pullRequests: PullRequest[],
+    skip: number,
+    maxResults?: number
+  ): PullRequest[] {
     if (maxResults) {
       return pullRequests.slice(skip, skip + maxResults);
     }
@@ -592,16 +661,20 @@ export class PullRequestService {
     const cacheKey = `${this.cacheKeyPrefix}repositories`;
     const cached = this.getCachedData<GitRepository[]>(cacheKey);
 
-    if (cached && this.isCacheValid(cached.timestamp, 300000)) { // 5 minute cache
+    if (cached && this.isCacheValid(cached.timestamp, 300000)) {
+      // 5 minute cache
       return cached.data;
     }
 
     try {
-      const repositories = await this.apiClient.getRepositories({ useCache: true, cacheTtl: 300000 });
+      const repositories = await this.apiClient.getRepositories({
+        useCache: true,
+        cacheTtl: 300000,
+      });
       this.setCacheData(cacheKey, repositories);
       return repositories;
     } catch (error) {
-      console.error('Failed to fetch repositories:', error);
+      console.error("Failed to fetch repositories:", error);
       return [];
     }
   }
@@ -622,13 +695,16 @@ export class PullRequestService {
 
       return {
         success: true,
-        timestamp: new Date()
+        timestamp: new Date(),
       };
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to vote on pull request',
-        timestamp: new Date()
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to vote on pull request",
+        timestamp: new Date(),
       };
     }
   }
@@ -637,14 +713,17 @@ export class PullRequestService {
    * Get cache key for data
    */
   private getCacheKey(...parts: any[]): string {
-    return `${this.cacheKeyPrefix}${parts.join('_')}`;
+    return `${this.cacheKeyPrefix}${parts.join("_")}`;
   }
 
   /**
    * Get cached data with metadata
    */
   private getCachedData<T>(key: string): { data: T; timestamp: number } | null {
-    const cached = this.context.workspaceState.get<{ data: T; timestamp: number }>(key);
+    const cached = this.context.workspaceState.get<{
+      data: T;
+      timestamp: number;
+    }>(key);
     return cached || null;
   }
 
@@ -654,7 +733,7 @@ export class PullRequestService {
   private setCacheData<T>(key: string, data: T): void {
     this.context.workspaceState.update(key, {
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 
@@ -669,19 +748,22 @@ export class PullRequestService {
    * Invalidate specific PR cache
    */
   private invalidatePrCache(repositoryId: string, pullRequestId: number): void {
-    const keys = this.context.workspaceState.keys().filter(key =>
-      key.includes(`single_${repositoryId}_${pullRequestId}`)
-    );
-    keys.forEach(key => this.context.workspaceState.update(key, undefined));
+    const keys = this.context.workspaceState
+      .keys()
+      .filter((key) => key.includes(`single_${repositoryId}_${pullRequestId}`));
+    keys.forEach((key) => this.context.workspaceState.update(key, undefined));
   }
 
   /**
    * Invalidate repository PRs cache
    */
   private invalidateRepositoryPrsCache(repositoryId: string): void {
-    const keys = this.context.workspaceState.keys().filter(key =>
-      key.includes(`list_${repositoryId}`) || key.includes('list_all')
-    );
-    keys.forEach(key => this.context.workspaceState.update(key, undefined));
+    const keys = this.context.workspaceState
+      .keys()
+      .filter(
+        (key) =>
+          key.includes(`list_${repositoryId}`) || key.includes("list_all")
+      );
+    keys.forEach((key) => this.context.workspaceState.update(key, undefined));
   }
 }

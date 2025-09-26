@@ -1,10 +1,11 @@
 import { describe, it, beforeEach, afterEach } from 'mocha';
 import * as assert from 'assert';
 import * as sinon from 'sinon';
-import { BackgroundSyncService } from '../../src/Services/BackgroundSyncService';
-import { AzureDevOpsApiClient } from '../../src/api/AzureDevOpsApiClient';
-import { ConfigurationService } from '../../src/services/ConfigurationService';
-import { StateManager } from '../../src/Services/StateManager';
+import { BackgroundSyncService } from '../../src/services/BackgroundSyncService';
+import { PullRequestService } from '../../src/services/PullRequestService';
+import { CommentService } from '../../src/services/CommentService';
+import { StateManager } from '../../src/services/StateManager';
+import { CacheManager } from '../../src/services/CacheManager';
 import { PullRequest, CommentThread, Identity, GitRepository } from '../../src/api/models';
 
 // Mock VS Code API
@@ -26,21 +27,19 @@ const mockExtensionContext = {
   }
 } as any;
 
-const mockApiClient = {
-  getRepositories: sinon.stub(),
+const mockPullRequestService = {
   getPullRequests: sinon.stub(),
-  getPullRequest: sinon.stub(),
-  getCommentThreads: sinon.stub(),
-  patch: sinon.stub(),
-  post: sinon.stub()
+  getPullRequestDetails: sinon.stub(),
+  approvePullRequest: sinon.stub(),
+  rejectPullRequest: sinon.stub(),
+  abandonPullRequest: sinon.stub()
 } as any;
 
-const mockConfigService = {
-  getConfiguration: sinon.stub().returns({
-    organizationUrl: 'https://dev.azure.com/test',
-    project: 'Test Project',
-    refreshInterval: 300
-  })
+const mockCommentService = {
+  getCommentThreads: sinon.stub(),
+  createComment: sinon.stub(),
+  updateComment: sinon.stub(),
+  deleteComment: sinon.stub()
 } as any;
 
 const mockStateManager = {
@@ -52,6 +51,13 @@ const mockStateManager = {
   removeStateUpdateListener: sinon.stub()
 } as any;
 
+const mockCacheManager = {
+  get: sinon.stub(),
+  set: sinon.stub(),
+  delete: sinon.stub(),
+  clear: sinon.stub()
+} as any;
+
 describe('BackgroundSyncService', () => {
   let syncService: BackgroundSyncService;
   let sandbox: sinon.SinonSandbox;
@@ -61,9 +67,10 @@ describe('BackgroundSyncService', () => {
     sandbox = sinon.createSandbox();
     clock = sandbox.useFakeTimers();
     syncService = new BackgroundSyncService(
-      mockApiClient,
-      mockConfigService,
+      mockPullRequestService,
+      mockCommentService,
       mockStateManager,
+      mockCacheManager,
       mockExtensionContext
     );
   });
@@ -80,7 +87,7 @@ describe('BackgroundSyncService', () => {
       assert.strictEqual(config.enabled, true);
       assert.strictEqual(config.syncInterval, 300000); // 5 minutes
       assert.strictEqual(config.offlineMode, false);
-      assert.strictEqual(conflictStrategy: 'latest-wins');
+      assert.strictEqual(config.conflictStrategy, 'latest-wins');
       assert.strictEqual(config.batchSize, 50);
       assert.strictEqual(config.maxRetries, 3);
       assert.strictEqual(config.retryDelay, 5000);

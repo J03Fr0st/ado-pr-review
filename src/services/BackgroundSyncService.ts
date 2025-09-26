@@ -1,9 +1,9 @@
-import * as vscode from 'vscode';
-import { PullRequestService } from './PullRequestService';
-import { CommentService } from './CommentService';
-import { StateManager } from './StateManager';
-import { CacheManager } from './CacheManager';
-import { PullRequest, CommentThread, Identity } from '../api/models';
+import * as vscode from "vscode";
+import { PullRequestService } from "./PullRequestService";
+import { CommentService } from "./CommentService";
+import { StateManager } from "./StateManager";
+import { CacheManager } from "./CacheManager";
+import { PullRequest, CommentThread, Identity } from "../api/models";
 
 /**
  * Sync configuration options
@@ -32,27 +32,27 @@ export interface SyncStatus {
   isSyncing: boolean;
   syncErrors: string[];
   syncCounters: {
-  pullRequests: number;
-  comments: number;
-  conflicts: number;
-  retries: number;
+    pullRequests: number;
+    comments: number;
+    conflicts: number;
+    retries: number;
   };
-  networkStatus: 'online' | 'offline' | 'unknown';
+  networkStatus: "online" | "offline" | "unknown";
 }
 
 /**
  * Sync event type
  */
 export type SyncEventType =
-  | 'syncStarted'
-  | 'syncCompleted'
-  | 'syncFailed'
-  | 'pullRequestUpdated'
-  | 'commentAdded'
-  | 'conflictDetected'
-  | 'networkStatusChanged'
-  | 'offlineModeActivated'
-  | 'offlineModeDeactivated';
+  | "syncStarted"
+  | "syncCompleted"
+  | "syncFailed"
+  | "pullRequestUpdated"
+  | "commentAdded"
+  | "conflictDetected"
+  | "networkStatusChanged"
+  | "offlineModeActivated"
+  | "offlineModeDeactivated";
 
 /**
  * Sync event
@@ -66,7 +66,7 @@ export interface SyncEvent {
 /**
  * Sync priority levels
  */
-export type SyncPriority = 'high' | 'normal' | 'low';
+export type SyncPriority = "high" | "normal" | "low";
 
 /**
  * Sync task interface
@@ -83,14 +83,18 @@ export interface SyncTask {
 /**
  * Conflict resolution strategy
  */
-export type ConflictResolutionStrategy = 'server-wins' | 'client-wins' | 'manual' | 'merge';
+export type ConflictResolutionStrategy =
+  | "server-wins"
+  | "client-wins"
+  | "manual"
+  | "merge";
 
 /**
  * Conflict information
  */
 export interface SyncConflict {
   id: string;
-  entityType: 'pullRequest' | 'comment';
+  entityType: "pullRequest" | "comment";
   entityId: string;
   localVersion: any;
   serverVersion: any;
@@ -162,9 +166,9 @@ export class BackgroundSyncService {
 
     // Notify initialization complete
     this.notifySyncEvent({
-      type: 'syncCompleted',
+      type: "syncCompleted",
       data: { initialized: true },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -199,9 +203,9 @@ export class BackgroundSyncService {
     }
 
     this.notifySyncEvent({
-      type: 'syncStarted',
-      data: { reason: 'manual_start' },
-      timestamp: new Date()
+      type: "syncStarted",
+      data: { reason: "manual_start" },
+      timestamp: new Date(),
     });
   }
 
@@ -218,9 +222,9 @@ export class BackgroundSyncService {
     this.syncIntervals.clear();
 
     this.notifySyncEvent({
-      type: 'syncCompleted',
-      data: { reason: 'manual_stop' },
-      timestamp: new Date()
+      type: "syncCompleted",
+      data: { reason: "manual_stop" },
+      timestamp: new Date(),
     });
   }
 
@@ -231,7 +235,11 @@ export class BackgroundSyncService {
    * @param entityId Entity ID
    * @param priority Sync priority
    */
-  async syncEntity(entityType: 'pullRequest' | 'comment', entityId: string, priority: SyncPriority = 'normal'): Promise<void> {
+  async syncEntity(
+    entityType: "pullRequest" | "comment",
+    entityId: string,
+    priority: SyncPriority = "normal"
+  ): Promise<void> {
     if (!this.isOnline) {
       this.queueForOffline({ entityType, entityId, priority });
       return;
@@ -239,18 +247,18 @@ export class BackgroundSyncService {
 
     try {
       switch (entityType) {
-        case 'pullRequest':
+        case "pullRequest":
           await this.syncPullRequest(entityId);
           break;
-        case 'comment':
+        case "comment":
           await this.syncComments(entityId);
           break;
       }
 
       this.notifySyncEvent({
-        type: 'syncCompleted',
+        type: "syncCompleted",
         data: { entityType, entityId },
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     } catch (error) {
       this.handleSyncError(error, entityType, entityId);
@@ -284,7 +292,10 @@ export class BackgroundSyncService {
    * @param conflictId Conflict ID
    * @param resolution Resolution strategy
    */
-  async resolveConflict(conflictId: string, resolution: ConflictResolutionStrategy): Promise<void> {
+  async resolveConflict(
+    conflictId: string,
+    resolution: ConflictResolutionStrategy
+  ): Promise<void> {
     const conflict = this.conflictQueue.get(conflictId);
     if (!conflict) {
       return;
@@ -293,16 +304,16 @@ export class BackgroundSyncService {
     conflict.resolution = resolution;
 
     switch (resolution) {
-      case 'server-wins':
+      case "server-wins":
         await this.applyServerVersion(conflict);
         break;
-      case 'client-wins':
+      case "client-wins":
         await this.applyClientVersion(conflict);
         break;
-      case 'merge':
+      case "merge":
         await this.mergeVersions(conflict);
         break;
-      case 'manual':
+      case "manual":
         // Manual resolution requires user interaction
         await this.promptManualResolution(conflict);
         break;
@@ -312,9 +323,9 @@ export class BackgroundSyncService {
     this.status.syncCounters.conflicts--;
 
     this.notifySyncEvent({
-      type: 'syncCompleted',
+      type: "syncCompleted",
       data: { conflictId, resolution },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
@@ -323,14 +334,14 @@ export class BackgroundSyncService {
    */
   async forceFullSync(): Promise<void> {
     if (!this.isOnline) {
-      throw new Error('Cannot force sync while offline');
+      throw new Error("Cannot force sync while offline");
     }
 
     this.status.isSyncing = true;
     this.notifySyncEvent({
-      type: 'syncStarted',
-      data: { reason: 'force_full_sync' },
-      timestamp: new Date()
+      type: "syncStarted",
+      data: { reason: "force_full_sync" },
+      timestamp: new Date(),
     });
 
     try {
@@ -345,12 +356,12 @@ export class BackgroundSyncService {
       this.status.syncErrors = [];
 
       this.notifySyncEvent({
-        type: 'syncCompleted',
+        type: "syncCompleted",
         data: { fullSync: true },
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     } catch (error) {
-      this.handleSyncError(error, 'full', 'sync');
+      this.handleSyncError(error, "full", "sync");
     } finally {
       this.status.isSyncing = false;
     }
@@ -374,7 +385,7 @@ export class BackgroundSyncService {
       await this.syncAllPullRequests();
     }, this.config.pullRequestInterval);
 
-    this.syncIntervals.set('pullRequests', interval);
+    this.syncIntervals.set("pullRequests", interval);
   }
 
   /**
@@ -385,7 +396,7 @@ export class BackgroundSyncService {
       await this.syncAllComments();
     }, this.config.commentInterval);
 
-    this.syncIntervals.set('comments', interval);
+    this.syncIntervals.set("comments", interval);
   }
 
   /**
@@ -396,7 +407,7 @@ export class BackgroundSyncService {
       await this.syncUserActivity();
     }, this.config.userActivityInterval);
 
-    this.syncIntervals.set('userActivity', interval);
+    this.syncIntervals.set("userActivity", interval);
   }
 
   /**
@@ -412,20 +423,25 @@ export class BackgroundSyncService {
 
       // Get current pull requests from state
       const currentState = this.stateManager.getState();
-      const currentPullRequests = Array.from(currentState.pullRequests.values());
+      const currentPullRequests = Array.from(
+        currentState.pullRequests.values()
+      );
 
       // Fetch latest pull requests
-      const latestPullRequests = await this.pullRequestService.getPullRequests();
+      const latestPullRequests =
+        await this.pullRequestService.getPullRequests();
 
       // Detect conflicts and updates
-      await this.processPullRequestUpdates(currentPullRequests, latestPullRequests);
+      await this.processPullRequestUpdates(
+        currentPullRequests,
+        latestPullRequests
+      );
 
       // Update status
       this.status.lastSync = new Date();
       this.status.syncCounters.pullRequests++;
-
     } catch (error) {
-      this.handleSyncError(error, 'pullRequests', 'sync');
+      this.handleSyncError(error, "pullRequests", "sync");
     } finally {
       this.status.isSyncing = false;
     }
@@ -451,9 +467,8 @@ export class BackgroundSyncService {
       }
 
       this.status.syncCounters.comments++;
-
     } catch (error) {
-      this.handleSyncError(error, 'comments', 'sync');
+      this.handleSyncError(error, "comments", "sync");
     } finally {
       this.status.isSyncing = false;
     }
@@ -463,15 +478,22 @@ export class BackgroundSyncService {
    * Sync specific pull request
    */
   private async syncPullRequest(prKey: string): Promise<void> {
-    const [repositoryId, pullRequestId] = prKey.split('_');
-    const pullRequest = await this.pullRequestService.getPullRequest(repositoryId, parseInt(pullRequestId));
+    const [repositoryId, pullRequestId] = prKey.split("_");
+    const pullRequest = await this.pullRequestService.getPullRequest(
+      repositoryId,
+      parseInt(pullRequestId)
+    );
 
     if (pullRequest) {
-      this.stateManager.updatePullRequest(repositoryId, parseInt(pullRequestId), pullRequest);
+      this.stateManager.updatePullRequest(
+        repositoryId,
+        parseInt(pullRequestId),
+        pullRequest
+      );
       this.notifySyncEvent({
-        type: 'pullRequestUpdated',
+        type: "pullRequestUpdated",
         data: { pullRequest },
-        timestamp: new Date()
+        timestamp: new Date(),
       });
     }
   }
@@ -480,10 +502,17 @@ export class BackgroundSyncService {
    * Sync comments for specific pull request
    */
   private async syncComments(prKey: string): Promise<void> {
-    const [repositoryId, pullRequestId] = prKey.split('_');
-    const threads = await this.commentService.getCommentThreads(repositoryId, parseInt(pullRequestId));
+    const [repositoryId, pullRequestId] = prKey.split("_");
+    const threads = await this.commentService.getCommentThreads(
+      repositoryId,
+      parseInt(pullRequestId)
+    );
 
-    this.stateManager.updateCommentThreads(repositoryId, parseInt(pullRequestId), threads);
+    this.stateManager.updateCommentThreads(
+      repositoryId,
+      parseInt(pullRequestId),
+      threads
+    );
   }
 
   /**
@@ -500,9 +529,14 @@ export class BackgroundSyncService {
   /**
    * Process pull request updates and detect conflicts
    */
-  private async processPullRequestUpdates(current: PullRequest[], latest: PullRequest[]): Promise<void> {
+  private async processPullRequestUpdates(
+    current: PullRequest[],
+    latest: PullRequest[]
+  ): Promise<void> {
     for (const latestPr of latest) {
-      const currentPr = current.find(pr => pr.pullRequestId === latestPr.pullRequestId);
+      const currentPr = current.find(
+        (pr) => pr.pullRequestId === latestPr.pullRequestId
+      );
 
       if (!currentPr) {
         // New PR
@@ -512,13 +546,22 @@ export class BackgroundSyncService {
 
       // Check for conflicts
       if (this.hasPullRequestConflict(currentPr, latestPr)) {
-        await this.createConflict('pullRequest', `${latestPr.repository.id}_${latestPr.pullRequestId}`, currentPr, latestPr);
+        await this.createConflict(
+          "pullRequest",
+          `${latestPr.repository.id}_${latestPr.pullRequestId}`,
+          currentPr,
+          latestPr
+        );
         continue;
       }
 
       // Update PR if changed
       if (this.hasPullRequestChanged(currentPr, latestPr)) {
-        this.stateManager.updatePullRequest(latestPr.repository.id, latestPr.pullRequestId, latestPr);
+        this.stateManager.updatePullRequest(
+          latestPr.repository.id,
+          latestPr.pullRequestId,
+          latestPr
+        );
       }
     }
   }
@@ -526,16 +569,22 @@ export class BackgroundSyncService {
   /**
    * Check if pull request has conflicts
    */
-  private hasPullRequestConflict(current: PullRequest, latest: PullRequest): boolean {
+  private hasPullRequestConflict(
+    current: PullRequest,
+    latest: PullRequest
+  ): boolean {
     // Simple conflict detection based on status and merge status
     // In a real implementation, you would compare specific fields
-    return current.status !== latest.status && current.status !== 'active';
+    return current.status !== latest.status && current.status !== "active";
   }
 
   /**
    * Check if pull request has changed
    */
-  private hasPullRequestChanged(current: PullRequest, latest: PullRequest): boolean {
+  private hasPullRequestChanged(
+    current: PullRequest,
+    latest: PullRequest
+  ): boolean {
     return (
       current.status !== latest.status ||
       current.title !== latest.title ||
@@ -548,7 +597,7 @@ export class BackgroundSyncService {
    * Create a sync conflict
    */
   private async createConflict(
-    entityType: 'pullRequest' | 'comment',
+    entityType: "pullRequest" | "comment",
     entityId: string,
     localVersion: any,
     serverVersion: any
@@ -559,24 +608,29 @@ export class BackgroundSyncService {
       entityId,
       localVersion,
       serverVersion,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
     this.conflictQueue.set(conflict.id, conflict);
     this.status.syncCounters.conflicts++;
 
     this.notifySyncEvent({
-      type: 'conflictDetected',
+      type: "conflictDetected",
       data: { conflict },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
   }
 
   /**
    * Handle sync errors
    */
-  private handleSyncError(error: any, entityType: string, entityId: string): void {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown sync error';
+  private handleSyncError(
+    error: any,
+    entityType: string,
+    entityId: string
+  ): void {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown sync error";
     this.status.syncErrors.push(errorMessage);
 
     // Keep only last 10 errors
@@ -587,14 +641,14 @@ export class BackgroundSyncService {
     this.status.syncCounters.retries++;
 
     this.notifySyncEvent({
-      type: 'syncFailed',
+      type: "syncFailed",
       data: { entityType, entityId, error: errorMessage },
-      timestamp: new Date()
+      timestamp: new Date(),
     });
 
     // Queue for offline if network error
     if (this.isNetworkError(error)) {
-      this.queueForOffline({ entityType, entityId, priority: 'normal' });
+      this.queueForOffline({ entityType, entityId, priority: "normal" });
     }
   }
 
@@ -602,16 +656,22 @@ export class BackgroundSyncService {
    * Check if error is network-related
    */
   private isNetworkError(error: any): boolean {
-    return error?.code === 'ENOTFOUND' ||
-           error?.code === 'ECONNREFUSED' ||
-           error?.message?.includes('network') ||
-           error?.message?.includes('offline');
+    return (
+      error?.code === "ENOTFOUND" ||
+      error?.code === "ECONNREFUSED" ||
+      error?.message?.includes("network") ||
+      error?.message?.includes("offline")
+    );
   }
 
   /**
    * Queue task for offline processing
    */
-  private queueForOffline(task: { entityType: string; entityId: string; priority: SyncPriority }): void {
+  private queueForOffline(task: {
+    entityType: string;
+    entityId: string;
+    priority: SyncPriority;
+  }): void {
     if (!this.config.enableOffline) {
       return;
     }
@@ -622,8 +682,12 @@ export class BackgroundSyncService {
       retryCount: 0,
       maxRetries: this.config.maxRetryAttempts,
       execute: async () => {
-        await this.syncEntity(task.entityType as 'pullRequest' | 'comment', task.entityId, task.priority);
-      }
+        await this.syncEntity(
+          task.entityType as "pullRequest" | "comment",
+          task.entityId,
+          task.priority
+        );
+      },
     };
 
     this.offlineQueue.push(syncTask);
@@ -654,7 +718,7 @@ export class BackgroundSyncService {
       const batch = this.offlineQueue.slice(i, i + batchSize);
 
       if (this.config.enableBatching) {
-        await Promise.all(batch.map(task => this.executeSyncTask(task)));
+        await Promise.all(batch.map((task) => this.executeSyncTask(task)));
       } else {
         for (const task of batch) {
           await this.executeSyncTask(task);
@@ -683,7 +747,7 @@ export class BackgroundSyncService {
         this.offlineQueue.push(task);
       } else {
         // Max retries exceeded
-        this.handleSyncError(error, 'task', task.id);
+        this.handleSyncError(error, "task", task.id);
       }
     }
   }
@@ -718,12 +782,17 @@ export class BackgroundSyncService {
   private async promptManualResolution(conflict: SyncConflict): Promise<void> {
     // Show conflict resolution UI to user
     const message = `Conflict detected for ${conflict.entityType} ${conflict.entityId}. Please resolve manually.`;
-    const result = await vscode.window.showErrorMessage(message, 'View Conflict', 'Server Wins', 'Client Wins');
+    const result = await vscode.window.showErrorMessage(
+      message,
+      "View Conflict",
+      "Server Wins",
+      "Client Wins"
+    );
 
-    if (result === 'Server Wins') {
-      await this.resolveConflict(conflict.id, 'server-wins');
-    } else if (result === 'Client Wins') {
-      await this.resolveConflict(conflict.id, 'client-wins');
+    if (result === "Server Wins") {
+      await this.resolveConflict(conflict.id, "server-wins");
+    } else if (result === "Client Wins") {
+      await this.resolveConflict(conflict.id, "client-wins");
     }
   }
 
@@ -732,11 +801,11 @@ export class BackgroundSyncService {
    */
   private activateOfflineMode(): void {
     this.isOnline = false;
-    this.status.networkStatus = 'offline';
+    this.status.networkStatus = "offline";
 
     this.notifySyncEvent({
-      type: 'offlineModeActivated',
-      timestamp: new Date()
+      type: "offlineModeActivated",
+      timestamp: new Date(),
     });
   }
 
@@ -745,11 +814,11 @@ export class BackgroundSyncService {
    */
   private deactivateOfflineMode(): void {
     this.isOnline = true;
-    this.status.networkStatus = 'online';
+    this.status.networkStatus = "online";
 
     this.notifySyncEvent({
-      type: 'offlineModeDeactivated',
-      timestamp: new Date()
+      type: "offlineModeDeactivated",
+      timestamp: new Date(),
     });
   }
 
@@ -766,12 +835,12 @@ export class BackgroundSyncService {
         this.isOnline = await this.checkNetworkStatus();
 
         if (wasOnline !== this.isOnline) {
-          this.status.networkStatus = this.isOnline ? 'online' : 'offline';
+          this.status.networkStatus = this.isOnline ? "online" : "offline";
 
           this.notifySyncEvent({
-            type: 'networkStatusChanged',
+            type: "networkStatusChanged",
             data: { online: this.isOnline },
-            timestamp: new Date()
+            timestamp: new Date(),
           });
 
           if (this.isOnline) {
@@ -779,11 +848,11 @@ export class BackgroundSyncService {
           }
         }
       } catch (error) {
-        console.error('Network status check failed:', error);
+        console.error("Network status check failed:", error);
       }
     }, 30000); // Check every 30 seconds
 
-    this.syncIntervals.set('network', interval);
+    this.syncIntervals.set("network", interval);
   }
 
   /**
@@ -793,8 +862,8 @@ export class BackgroundSyncService {
     const onDidChangeWindowState = (windowState: vscode.WindowState) => {
       if (windowState.focused && this.config.syncOnFocus) {
         // Trigger sync when window gains focus
-        this.syncAllPullRequests().catch(error => {
-          console.error('Focus sync failed:', error);
+        this.syncAllPullRequests().catch((error) => {
+          console.error("Focus sync failed:", error);
         });
       }
     };
@@ -810,7 +879,7 @@ export class BackgroundSyncService {
   private setupLifecycleHooks(): void {
     // Cleanup on deactivation
     this.context.subscriptions.push({
-      dispose: () => this.dispose()
+      dispose: () => this.dispose(),
     });
   }
 
@@ -835,7 +904,7 @@ export class BackgroundSyncService {
       try {
         listener(event);
       } catch (error) {
-        console.error('Error in sync event listener:', error);
+        console.error("Error in sync event listener:", error);
       }
     }
   }
@@ -855,7 +924,7 @@ export class BackgroundSyncService {
       enableOffline: true,
       maxRetryAttempts: 3,
       syncOnStartup: true,
-      syncOnFocus: true
+      syncOnFocus: true,
     };
 
     return { ...defaults, ...config };
@@ -873,9 +942,9 @@ export class BackgroundSyncService {
         pullRequests: 0,
         comments: 0,
         conflicts: 0,
-        retries: 0
+        retries: 0,
       },
-      networkStatus: 'unknown'
+      networkStatus: "unknown",
     };
   }
 }

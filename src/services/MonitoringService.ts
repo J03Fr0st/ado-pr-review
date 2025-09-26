@@ -1,5 +1,5 @@
-import * as vscode from 'vscode';
-import { TelemetryService } from './TelemetryService';
+import * as vscode from "vscode";
+import { TelemetryService } from "./TelemetryService";
 
 /**
  * Monitoring service for health checks, performance tracking, and error monitoring
@@ -18,13 +18,13 @@ export class MonitoringService {
     performanceThresholds: {
       apiCall: 5000, // 5 seconds
       uiOperation: 1000, // 1 second
-      dataLoad: 3000 // 3 seconds
+      dataLoad: 3000, // 3 seconds
     },
     errorRateThresholds: {
       warning: 0.05, // 5% error rate
-      critical: 0.1 // 10% error rate
+      critical: 0.1, // 10% error rate
     },
-    metricsRetentionHours: 24
+    metricsRetentionHours: 24,
   };
 
   private constructor() {
@@ -60,8 +60,8 @@ export class MonitoringService {
   private async performHealthCheck(): Promise<void> {
     const healthStatus: HealthCheckResult = {
       timestamp: new Date().toISOString(),
-      overall: 'healthy',
-      checks: {}
+      overall: "healthy",
+      checks: {},
     };
 
     try {
@@ -81,21 +81,24 @@ export class MonitoringService {
       healthStatus.checks.configuration = await this.checkConfigurationHealth();
 
       // Determine overall health
-      const failedChecks = Object.values(healthStatus.checks).filter(check => check.status === 'unhealthy');
-      const warningChecks = Object.values(healthStatus.checks).filter(check => check.status === 'degraded');
+      const failedChecks = Object.values(healthStatus.checks).filter(
+        (check) => check.status === "unhealthy"
+      );
+      const warningChecks = Object.values(healthStatus.checks).filter(
+        (check) => check.status === "degraded"
+      );
 
       if (failedChecks.length > 0) {
-        healthStatus.overall = 'unhealthy';
+        healthStatus.overall = "unhealthy";
       } else if (warningChecks.length > 0) {
-        healthStatus.overall = 'degraded';
+        healthStatus.overall = "degraded";
       }
 
       // Report health status
       this.reportHealthStatus(healthStatus);
-
     } catch (error) {
-      console.error('❌ Health check failed:', error);
-      this.telemetry.trackError('health.check.failed', error as Error);
+      console.error("❌ Health check failed:", error);
+      this.telemetry.trackError("health.check.failed", error as Error);
     }
   }
 
@@ -110,31 +113,35 @@ export class MonitoringService {
 
       // Test command registration
       const commands = await vscode.commands.getCommands();
-      const hasOurCommands = commands.some(cmd => cmd.startsWith('azureDevOps.'));
+      const hasOurCommands = commands.some((cmd) =>
+        cmd.startsWith("azureDevOps.")
+      );
 
       if (!hasOurCommands) {
         return {
-          status: 'unhealthy',
-          message: 'Extension commands not registered',
-          timestamp: new Date().toISOString()
+          status: "unhealthy",
+          message: "Extension commands not registered",
+          timestamp: new Date().toISOString(),
         };
       }
 
       return {
-        status: 'healthy',
-        message: 'VS Code API functioning normally',
+        status: "healthy",
+        message: "VS Code API functioning normally",
         timestamp: new Date().toISOString(),
         details: {
           workspaceFolders: workspaceFolders?.length || 0,
           hasActiveEditor: !!activeEditor,
-          commandsRegistered: commands.filter(cmd => cmd.startsWith('azureDevOps.')).length
-        }
+          commandsRegistered: commands.filter((cmd) =>
+            cmd.startsWith("azureDevOps.")
+          ).length,
+        },
       };
     } catch (error) {
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
         message: `VS Code API error: ${error}`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     }
   }
@@ -148,16 +155,16 @@ export class MonitoringService {
       const heapUsedMB = Math.round(memUsage.heapUsed / 1024 / 1024);
       const heapTotalMB = Math.round(memUsage.heapTotal / 1024 / 1024);
 
-      let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+      let status: "healthy" | "degraded" | "unhealthy" = "healthy";
       let message = `Memory usage normal: ${heapUsedMB}MB used`;
 
       if (heapUsedMB > 200) {
-        status = 'degraded';
+        status = "degraded";
         message = `High memory usage: ${heapUsedMB}MB used`;
       }
 
       if (heapUsedMB > 500) {
-        status = 'unhealthy';
+        status = "unhealthy";
         message = `Critical memory usage: ${heapUsedMB}MB used`;
       }
 
@@ -169,14 +176,14 @@ export class MonitoringService {
           heapUsed: heapUsedMB,
           heapTotal: heapTotalMB,
           rss: Math.round(memUsage.rss / 1024 / 1024),
-          external: Math.round(memUsage.external / 1024 / 1024)
-        }
+          external: Math.round(memUsage.external / 1024 / 1024),
+        },
       };
     } catch (error) {
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
         message: `Memory check failed: ${error}`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     }
   }
@@ -189,28 +196,34 @@ export class MonitoringService {
 
     if (recentMetrics.length === 0) {
       return {
-        status: 'healthy',
-        message: 'No recent performance data',
-        timestamp: new Date().toISOString()
+        status: "healthy",
+        message: "No recent performance data",
+        timestamp: new Date().toISOString(),
       };
     }
 
-    const slowOperations = recentMetrics.filter(metric =>
-      metric.duration > (this.config.performanceThresholds[metric.operation as keyof typeof this.config.performanceThresholds] || 5000)
+    const slowOperations = recentMetrics.filter(
+      (metric) =>
+        metric.duration >
+        (this.config.performanceThresholds[
+          metric.operation as keyof typeof this.config.performanceThresholds
+        ] || 5000)
     );
 
-    const avgDuration = recentMetrics.reduce((sum, metric) => sum + metric.duration, 0) / recentMetrics.length;
+    const avgDuration =
+      recentMetrics.reduce((sum, metric) => sum + metric.duration, 0) /
+      recentMetrics.length;
 
-    let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+    let status: "healthy" | "degraded" | "unhealthy" = "healthy";
     let message = `Performance normal: ${Math.round(avgDuration)}ms avg`;
 
     if (slowOperations.length > recentMetrics.length * 0.1) {
-      status = 'degraded';
+      status = "degraded";
       message = `Performance degraded: ${slowOperations.length}/${recentMetrics.length} slow operations`;
     }
 
     if (slowOperations.length > recentMetrics.length * 0.25) {
-      status = 'unhealthy';
+      status = "unhealthy";
       message = `Performance critical: ${slowOperations.length}/${recentMetrics.length} slow operations`;
     }
 
@@ -222,8 +235,8 @@ export class MonitoringService {
         totalOperations: recentMetrics.length,
         slowOperations: slowOperations.length,
         averageDuration: Math.round(avgDuration),
-        maxDuration: Math.max(...recentMetrics.map(m => m.duration))
-      }
+        maxDuration: Math.max(...recentMetrics.map((m) => m.duration)),
+      },
     };
   }
 
@@ -235,26 +248,32 @@ export class MonitoringService {
 
     if (recentErrors.length === 0) {
       return {
-        status: 'healthy',
-        message: 'No recent errors',
-        timestamp: new Date().toISOString()
+        status: "healthy",
+        message: "No recent errors",
+        timestamp: new Date().toISOString(),
       };
     }
 
-    const totalOperations = recentErrors.reduce((sum, error) => sum + error.total, 0);
-    const totalErrors = recentErrors.reduce((sum, error) => sum + error.errors, 0);
+    const totalOperations = recentErrors.reduce(
+      (sum, error) => sum + error.total,
+      0
+    );
+    const totalErrors = recentErrors.reduce(
+      (sum, error) => sum + error.errors,
+      0
+    );
     const errorRate = totalOperations > 0 ? totalErrors / totalOperations : 0;
 
-    let status: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+    let status: "healthy" | "degraded" | "unhealthy" = "healthy";
     let message = `Error rate normal: ${(errorRate * 100).toFixed(2)}%`;
 
     if (errorRate > this.config.errorRateThresholds.warning) {
-      status = 'degraded';
+      status = "degraded";
       message = `Error rate elevated: ${(errorRate * 100).toFixed(2)}%`;
     }
 
     if (errorRate > this.config.errorRateThresholds.critical) {
-      status = 'unhealthy';
+      status = "unhealthy";
       message = `Error rate critical: ${(errorRate * 100).toFixed(2)}%`;
     }
 
@@ -266,8 +285,8 @@ export class MonitoringService {
         errorRate: parseFloat((errorRate * 100).toFixed(2)),
         totalErrors,
         totalOperations,
-        uniqueErrorTypes: recentErrors.length
-      }
+        uniqueErrorTypes: recentErrors.length,
+      },
     };
   }
 
@@ -276,40 +295,40 @@ export class MonitoringService {
    */
   private async checkConfigurationHealth(): Promise<HealthCheck> {
     try {
-      const config = vscode.workspace.getConfiguration('azureDevOps');
+      const config = vscode.workspace.getConfiguration("azureDevOps");
 
       // Check if basic configuration exists
-      const hasOrganization = !!config.get('organizationUrl');
-      const hasProject = !!config.get('project');
+      const hasOrganization = !!config.get("organizationUrl");
+      const hasProject = !!config.get("project");
 
       if (!hasOrganization || !hasProject) {
         return {
-          status: 'degraded',
-          message: 'Extension not fully configured',
+          status: "degraded",
+          message: "Extension not fully configured",
           timestamp: new Date().toISOString(),
           details: {
             hasOrganization,
             hasProject,
-            configuredSettings: Object.keys(config).length
-          }
+            configuredSettings: Object.keys(config).length,
+          },
         };
       }
 
       return {
-        status: 'healthy',
-        message: 'Configuration complete',
+        status: "healthy",
+        message: "Configuration complete",
         timestamp: new Date().toISOString(),
         details: {
           hasOrganization,
           hasProject,
-          configuredSettings: Object.keys(config).length
-        }
+          configuredSettings: Object.keys(config).length,
+        },
       };
     } catch (error) {
       return {
-        status: 'unhealthy',
+        status: "unhealthy",
         message: `Configuration check failed: ${error}`,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
     }
   }
@@ -319,45 +338,53 @@ export class MonitoringService {
    */
   private reportHealthStatus(healthStatus: HealthCheckResult): void {
     // Log health status
-    if (healthStatus.overall === 'healthy') {
-      console.log('💚 Health check passed');
-    } else if (healthStatus.overall === 'degraded') {
-      console.warn('💛 Health check shows degraded performance:', healthStatus);
+    if (healthStatus.overall === "healthy") {
+      console.log("💚 Health check passed");
+    } else if (healthStatus.overall === "degraded") {
+      console.warn("💛 Health check shows degraded performance:", healthStatus);
     } else {
-      console.error('❤️ Health check failed:', healthStatus);
+      console.error("❤️ Health check failed:", healthStatus);
     }
 
     // Send to telemetry
-    this.telemetry.trackEvent('health.check', {
+    this.telemetry.trackEvent("health.check", {
       overall: healthStatus.overall,
       checksCount: Object.keys(healthStatus.checks).length.toString(),
       failedChecks: Object.entries(healthStatus.checks)
-        .filter(([_, check]) => check.status === 'unhealthy')
+        .filter(([_, check]) => check.status === "unhealthy")
         .map(([name]) => name)
-        .join(','),
+        .join(","),
       degradedChecks: Object.entries(healthStatus.checks)
-        .filter(([_, check]) => check.status === 'degraded')
+        .filter(([_, check]) => check.status === "degraded")
         .map(([name]) => name)
-        .join(',')
+        .join(","),
     });
 
     // Send alerts for unhealthy status
-    if (healthStatus.overall === 'unhealthy') {
-      this.telemetry.trackError('health.check.unhealthy', new Error('Health check failed'), {
-        healthStatus: JSON.stringify(healthStatus)
-      });
+    if (healthStatus.overall === "unhealthy") {
+      this.telemetry.trackError(
+        "health.check.unhealthy",
+        new Error("Health check failed"),
+        {
+          healthStatus: JSON.stringify(healthStatus),
+        }
+      );
     }
   }
 
   /**
    * Track operation performance
    */
-  trackPerformance(operation: string, duration: number, success: boolean = true): void {
+  trackPerformance(
+    operation: string,
+    duration: number,
+    success: boolean = true
+  ): void {
     const metric: PerformanceMetric = {
       operation,
       duration,
       success,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
 
     // Store metric
@@ -371,12 +398,25 @@ export class MonitoringService {
     this.cleanOldMetrics();
 
     // Check for performance issues
-    if (duration > (this.config.performanceThresholds[operation as keyof typeof this.config.performanceThresholds] || 5000)) {
-      this.telemetry.trackError('performance.slow', new Error(`Slow operation: ${operation}`), {
-        operation,
-        duration: duration.toString(),
-        threshold: (this.config.performanceThresholds[operation as keyof typeof this.config.performanceThresholds] || 5000).toString()
-      });
+    if (
+      duration >
+      (this.config.performanceThresholds[
+        operation as keyof typeof this.config.performanceThresholds
+      ] || 5000)
+    ) {
+      this.telemetry.trackError(
+        "performance.slow",
+        new Error(`Slow operation: ${operation}`),
+        {
+          operation,
+          duration: duration.toString(),
+          threshold: (
+            this.config.performanceThresholds[
+              operation as keyof typeof this.config.performanceThresholds
+            ] || 5000
+          ).toString(),
+        }
+      );
     }
   }
 
@@ -385,7 +425,12 @@ export class MonitoringService {
    */
   trackError(operation: string, error: Error | string): void {
     const errorKey = `${operation}_${new Date().getHours()}`;
-    const existingRate = this.errorRates.get(errorKey) || { operation, errors: 0, total: 0, hour: new Date().getHours() };
+    const existingRate = this.errorRates.get(errorKey) || {
+      operation,
+      errors: 0,
+      total: 0,
+      hour: new Date().getHours(),
+    };
 
     existingRate.errors++;
     existingRate.total++;
@@ -403,7 +448,12 @@ export class MonitoringService {
    */
   trackSuccess(operation: string): void {
     const errorKey = `${operation}_${new Date().getHours()}`;
-    const existingRate = this.errorRates.get(errorKey) || { operation, errors: 0, total: 0, hour: new Date().getHours() };
+    const existingRate = this.errorRates.get(errorKey) || {
+      operation,
+      errors: 0,
+      total: 0,
+      hour: new Date().getHours(),
+    };
 
     existingRate.total++;
     this.errorRates.set(errorKey, existingRate);
@@ -412,9 +462,13 @@ export class MonitoringService {
   /**
    * Get recent performance metrics
    */
-  private getRecentPerformanceMetrics(timeWindowMs: number): PerformanceMetric[] {
+  private getRecentPerformanceMetrics(
+    timeWindowMs: number
+  ): PerformanceMetric[] {
     const cutoff = Date.now() - timeWindowMs;
-    return Array.from(this.performanceMetrics.values()).filter(metric => metric.timestamp > cutoff);
+    return Array.from(this.performanceMetrics.values()).filter(
+      (metric) => metric.timestamp > cutoff
+    );
   }
 
   /**
@@ -424,8 +478,11 @@ export class MonitoringService {
     const hoursBack = Math.ceil(timeWindowMs / (60 * 60 * 1000));
     const currentHour = new Date().getHours();
 
-    return Array.from(this.errorRates.values()).filter(rate => {
-      const hourDiff = currentHour >= rate.hour ? currentHour - rate.hour : (24 - rate.hour) + currentHour;
+    return Array.from(this.errorRates.values()).filter((rate) => {
+      const hourDiff =
+        currentHour >= rate.hour
+          ? currentHour - rate.hour
+          : 24 - rate.hour + currentHour;
       return hourDiff <= hoursBack;
     });
   }
@@ -434,7 +491,8 @@ export class MonitoringService {
    * Clean old metrics
    */
   private cleanOldMetrics(): void {
-    const cutoff = Date.now() - (this.config.metricsRetentionHours * 60 * 60 * 1000);
+    const cutoff =
+      Date.now() - this.config.metricsRetentionHours * 60 * 60 * 1000;
 
     for (const [key, metric] of this.performanceMetrics.entries()) {
       if (metric.timestamp < cutoff) {
@@ -450,7 +508,10 @@ export class MonitoringService {
     const currentHour = new Date().getHours();
 
     for (const [key, rate] of this.errorRates.entries()) {
-      const hourDiff = currentHour >= rate.hour ? currentHour - rate.hour : (24 - rate.hour) + currentHour;
+      const hourDiff =
+        currentHour >= rate.hour
+          ? currentHour - rate.hour
+          : 24 - rate.hour + currentHour;
       if (hourDiff > this.config.metricsRetentionHours) {
         this.errorRates.delete(key);
       }
@@ -463,18 +524,28 @@ export class MonitoringService {
   private startPerformanceMonitoring(): void {
     // Monitor VS Code API calls
     const originalExecuteCommand = vscode.commands.executeCommand;
-    vscode.commands.executeCommand = async <T>(command: string, ...rest: any[]): Promise<T> => {
+    vscode.commands.executeCommand = async <T>(
+      command: string,
+      ...rest: any[]
+    ): Promise<T> => {
       const start = Date.now();
       try {
         const result = await originalExecuteCommand<T>(command, ...rest);
-        this.trackPerformance('vscode.command', Date.now() - start, true);
+        this.trackPerformance("vscode.command", Date.now() - start, true);
         return result;
       } catch (error) {
-        this.trackPerformance('vscode.command', Date.now() - start, false);
-        this.trackError('vscode.command', error as Error);
+        this.trackPerformance("vscode.command", Date.now() - start, false);
+        this.trackError("vscode.command", error as Error);
         throw error;
       }
     };
+  }
+
+  /**
+   * Get performance metrics for external services
+   */
+  getPerformanceMetrics(): Map<string, PerformanceMetric> {
+    return new Map(this.performanceMetrics);
   }
 
   /**
@@ -486,7 +557,7 @@ export class MonitoringService {
       metricsCount: this.performanceMetrics.size,
       errorRatesCount: this.errorRates.size,
       lastHealthCheck: new Date().toISOString(), // This would be stored in practice
-      isDisposed: this.isDisposed
+      isDisposed: this.isDisposed,
     };
   }
 
@@ -504,7 +575,7 @@ export class MonitoringService {
     this.performanceMetrics.clear();
     this.errorRates.clear();
 
-    console.log('📊 Monitoring service disposed');
+    console.log("📊 Monitoring service disposed");
   }
 }
 
@@ -524,7 +595,7 @@ interface ErrorRate {
 }
 
 interface HealthCheck {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: "healthy" | "degraded" | "unhealthy";
   message: string;
   timestamp: string;
   details?: Record<string, any>;
@@ -532,7 +603,7 @@ interface HealthCheck {
 
 interface HealthCheckResult {
   timestamp: string;
-  overall: 'healthy' | 'degraded' | 'unhealthy';
+  overall: "healthy" | "degraded" | "unhealthy";
   checks: Record<string, HealthCheck>;
 }
 
