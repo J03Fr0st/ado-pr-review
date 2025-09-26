@@ -1,5 +1,3 @@
-import { describe, it } from 'mocha';
-import * as assert from 'assert';
 import { AuthenticationService } from '../../src/services/AuthenticationService';
 import { ErrorHandler } from '../../src/utils/ErrorHandler';
 
@@ -26,8 +24,8 @@ describe('Security Validation Tests', () => {
       // Test that error message sanitization works
       const sanitizedMessage = (errorHandler as any).sanitizeErrorMessage(errorMessage);
 
-      assert.ok(!sanitizedMessage.includes(testPat), 'PAT token should not appear in error message');
-      assert.ok(sanitizedMessage.includes('[REDACTED]'), 'PAT should be replaced with [REDACTED]');
+      expect(sanitizedMessage).not.toContain(testPat);
+      expect(sanitizedMessage).toContain('[REDACTED]');
     });
 
     it('should sanitize Bearer tokens from error messages', () => {
@@ -37,8 +35,8 @@ describe('Security Validation Tests', () => {
       const errorHandler = ErrorHandler.getInstance();
       const sanitizedMessage = (errorHandler as any).sanitizeErrorMessage(errorMessage);
 
-      assert.ok(!sanitizedMessage.includes('abcd1234567890'), 'Bearer token should not appear in error message');
-      assert.ok(sanitizedMessage.includes('Bearer [REDACTED]'), 'Bearer token should be replaced');
+      expect(sanitizedMessage).not.toContain('abcd1234567890');
+      expect(sanitizedMessage).toContain('Bearer [REDACTED]');
     });
 
     it('should sanitize Basic auth from error messages', () => {
@@ -48,8 +46,8 @@ describe('Security Validation Tests', () => {
       const errorHandler = ErrorHandler.getInstance();
       const sanitizedMessage = (errorHandler as any).sanitizeErrorMessage(errorMessage);
 
-      assert.ok(!sanitizedMessage.includes('YWJjZDEyMzQ1Njc4OTA='), 'Basic auth should not appear in error message');
-      assert.ok(sanitizedMessage.includes('Basic [REDACTED]'), 'Basic auth should be replaced');
+      expect(sanitizedMessage).not.toContain('YWJjZDEyMzQ1Njc4OTA=');
+      expect(sanitizedMessage).toContain('Basic [REDACTED]');
     });
 
     it('should sanitize sensitive context data', () => {
@@ -64,11 +62,11 @@ describe('Security Validation Tests', () => {
       const errorHandler = ErrorHandler.getInstance();
       const sanitized = (errorHandler as any).sanitizeContext(sensitiveContext);
 
-      assert.strictEqual(sanitized.organizationUrl, 'https://dev.azure.com/test');
-      assert.strictEqual(sanitized.token, '[REDACTED]');
-      assert.strictEqual(sanitized.password, '[REDACTED]');
-      assert.strictEqual(sanitized.secretKey, '[REDACTED]');
-      assert.strictEqual(sanitized.normalData, 'this-should-remain');
+      expect(sanitized.organizationUrl).toBe('https://dev.azure.com/test');
+      expect(sanitized.token).toBe('[REDACTED]');
+      expect(sanitized.password).toBe('[REDACTED]');
+      expect(sanitized.secretKey).toBe('[REDACTED]');
+      expect(sanitized.normalData).toBe('this-should-remain');
     });
 
   });
@@ -82,8 +80,8 @@ describe('Security Validation Tests', () => {
       const windowMs = 60000; // 1 minute
 
       // These values should match AzureDevOpsApiClient.RATE_LIMIT configuration
-      assert.ok(maxRequestsPerMinute <= 200, 'Rate limit should not exceed Azure DevOps limit');
-      assert.strictEqual(windowMs, 60000, 'Rate limit window should be 1 minute');
+      expect(maxRequestsPerMinute).toBeLessThanOrEqual(200);
+      expect(windowMs).toBe(60000);
     });
 
   });
@@ -95,16 +93,16 @@ describe('Security Validation Tests', () => {
       const validationTimeout = 10000; // 10 seconds
 
       // These values should match our implementation
-      assert.ok(defaultTimeout <= 30000, 'Default timeout should be reasonable');
-      assert.ok(validationTimeout <= 15000, 'Validation timeout should be fast');
+      expect(defaultTimeout).toBeLessThanOrEqual(30000);
+      expect(validationTimeout).toBeLessThanOrEqual(15000);
     });
 
     it('should have appropriate cache TTL settings', () => {
       const defaultCacheTtl = 300000; // 5 minutes
 
       // Cache should not be too long to ensure fresh data
-      assert.ok(defaultCacheTtl <= 600000, 'Cache TTL should not exceed 10 minutes');
-      assert.ok(defaultCacheTtl >= 60000, 'Cache TTL should be at least 1 minute');
+      expect(defaultCacheTtl).toBeLessThanOrEqual(600000);
+      expect(defaultCacheTtl).toBeGreaterThanOrEqual(60000);
     });
 
   });
@@ -128,12 +126,12 @@ describe('Security Validation Tests', () => {
       // This is a specification test to ensure proper validation exists
       for (const url of validUrls) {
         const isValid = /^https:\/\/(dev\.azure\.com\/[^\/]+|[^\.\/]+\.visualstudio\.com)$/.test(url);
-        assert.ok(isValid, `Valid URL should pass: ${url}`);
+        expect(isValid).toBe(true);
       }
 
       for (const url of invalidUrls) {
         const isValid = /^https:\/\/(dev\.azure\.com\/[^\/]+|[^\.\/]+\.visualstudio\.com)$/.test(url);
-        assert.ok(!isValid, `Invalid URL should fail: ${url}`);
+        expect(isValid).toBe(false);
       }
     });
 

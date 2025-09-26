@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { AdoPrProvider } from '../../src/providers/AdoPrProvider';
-import { ConfigurationManager } from '../../src/services/ConfigurationManager';
-import { AzureDevOpsApi } from '../../src/services/AzureDevOpsApi';
+import { PullRequestTreeProvider } from '../../src/providers/PullRequestTreeProvider';
+import { ConfigurationService } from '../../src/services/ConfigurationService';
+import { AzureDevOpsApiClientClient } from '../../src/api/AzureDevOpsApiClientClient';
 import { TelemetryService } from '../../src/services/TelemetryService';
 
 describe('Azure DevOps PR Reviewer Extension Tests', () => {
@@ -56,8 +56,8 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
     });
   });
 
-  describe('Configuration Manager', () => {
-    let configManager: ConfigurationManager;
+  describe('Configuration Service', () => {
+    let configService: ConfigurationService;
     let secretStorageMock: any;
 
     beforeEach(() => {
@@ -66,7 +66,7 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
         store: jest.fn(),
         delete: jest.fn()
       };
-      configManager = new ConfigurationManager(secretStorageMock);
+      configService = new ConfigurationService(secretStorageMock);
     });
 
     it('should validate organization URL format', async () => {
@@ -82,12 +82,12 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
       ];
 
       for (const url of validUrls) {
-        const result = await configManager.validateOrganizationUrl(url);
+        const result = await configService.validateOrganizationUrl(url);
         expect(result.isValid).toBe(true);
       }
 
       for (const url of invalidUrls) {
-        const result = await configManager.validateOrganizationUrl(url);
+        const result = await configService.validateOrganizationUrl(url);
         expect(result.isValid).toBe(false);
       }
     });
@@ -96,8 +96,8 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
       const testPat = 'test-personal-access-token';
       secretStorageMock.get.mockResolvedValue(testPat);
 
-      await configManager.storePat(testPat);
-      const retrievedPat = await configManager.getPat();
+      await configService.storePat(testPat);
+      const retrievedPat = await configService.getPat();
 
       expect(secretStorageMock.store).toHaveBeenCalledWith('adoPat', testPat);
       expect(retrievedPat).toBe(testPat);
@@ -106,7 +106,7 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
     it('should handle missing configuration gracefully', async () => {
       secretStorageMock.get.mockResolvedValue(undefined);
 
-      const config = await configManager.getConfiguration();
+      const config = await configService.getConfiguration();
 
       expect(config.organizationUrl).toBeUndefined();
       expect(config.project).toBeUndefined();
@@ -115,12 +115,12 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
   });
 
   describe('Azure DevOps API', () => {
-    let api: AzureDevOpsApi;
+    let api: AzureDevOpsApiClient;
     let httpMock: jest.Mock;
 
     beforeEach(() => {
       httpMock = jest.fn();
-      api = new AzureDevOpsApi('https://dev.azure.com/test', 'TestProject', 'test-pat');
+      api = new AzureDevOpsApiClient('https://dev.azure.com/test', 'TestProject', 'test-pat');
       (api as any).httpClient = { get: httpMock, post: httpMock, patch: httpMock };
     });
 
@@ -184,7 +184,7 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
   });
 
   describe('ADO PR Provider', () => {
-    let provider: AdoPrProvider;
+    let provider: PullRequestTreeProvider;
     let apiMock: any;
     let configMock: any;
 
@@ -205,7 +205,7 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
         isConfigured: jest.fn().mockReturnValue(true)
       };
 
-      provider = new AdoPrProvider(configMock, apiMock);
+      provider = new PullRequestTreeProvider(configMock, apiMock);
     });
 
     it('should load pull requests and create tree items', async () => {
@@ -265,7 +265,7 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
         sendTelemetryEvent: jest.fn(),
         sendTelemetryErrorEvent: jest.fn()
       };
-      telemetryService = new TelemetryService(telemetryReporter);
+      telemetryService = TelemetryService.getInstance();
     });
 
     it('should track command execution', () => {
@@ -289,7 +289,7 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
     });
 
     it('should respect user opt-out preferences', () => {
-      telemetryService = new TelemetryService(telemetryReporter, false);
+      telemetryService = TelemetryService.getInstance();
 
       telemetryService.trackCommand('test.command');
 
@@ -339,7 +339,7 @@ describe('Azure DevOps PR Reviewer Extension Tests', () => {
         isConfigured: jest.fn().mockReturnValue(true)
       };
 
-      const provider = new AdoPrProvider(config, api);
+      const provider = new PullRequestTreeProvider(config, api);
 
       const start = Date.now();
       const children = await provider.getChildren();
