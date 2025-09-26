@@ -15,11 +15,12 @@ npm run watch
 npm run build
 npm run package
 
-# Testing
-npm run test              # Unit + integration tests
+# Testing (Jest-based)
+npm run test              # All tests (unit + integration)
 npm run test:unit         # Unit tests only
 npm run test:integration  # Integration tests only
 npm run test:e2e          # End-to-end tests (requires packaged .vsix)
+npm run test:watch        # Run tests in watch mode
 npm run coverage          # Generate coverage report
 
 # Code quality (run before commits)
@@ -55,9 +56,17 @@ This is a **VS Code extension** that provides Azure DevOps pull request review c
 
 ## Testing Strategy
 
-- **Unit tests** (`tests/unit/`) - Test individual modules with `.test.ts` suffix
-- **Integration tests** (`tests/integration/`) - Require `ADO_TEST_PAT` and `ADO_TEST_ORG` environment variables
+- **Unit tests** (`tests/unit/`) - Jest-based individual module tests with `.test.ts` suffix
+- **Integration tests** (`tests/integration/`) - Jest-based integration tests requiring `ADO_TEST_PAT` and `ADO_TEST_ORG` environment variables
 - **E2E tests** (`tests/e2e/`) - Playwright-based tests that run against packaged `.vsix` file
+
+### Jest Configuration
+
+Jest is configured to handle TypeScript, VS Code APIs, and extension-specific patterns:
+- Uses `ts-jest` for TypeScript compilation
+- Mocks VS Code API automatically
+- Includes coverage reporting with detailed metrics
+- Supports watch mode for development (`npm run test:watch`)
 
 Run `npm run test:e2e` only after `npm run package` to test the complete extension.
 

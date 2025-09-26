@@ -1,53 +1,41 @@
-import * as assert from 'assert';
 import * as vscode from 'vscode';
-import * as sinon from 'sinon';
 import { AdoPrProvider } from '../../src/providers/AdoPrProvider';
 import { ConfigurationManager } from '../../src/services/ConfigurationManager';
 import { AzureDevOpsApi } from '../../src/services/AzureDevOpsApi';
 import { TelemetryService } from '../../src/services/TelemetryService';
 
-suite('Azure DevOps PR Reviewer Extension Tests', () => {
-  let sandbox: sinon.SinonSandbox;
-
-  setup(() => {
-    sandbox = sinon.createSandbox();
-  });
-
-  teardown(() => {
-    sandbox.restore();
-  });
-
-  suite('Extension Activation', () => {
-    test('should activate extension successfully', async () => {
+describe('Azure DevOps PR Reviewer Extension Tests', () => {
+  describe('Extension Activation', () => {
+    it('should activate extension successfully', async () => {
       const context = {
         subscriptions: [],
         extensionUri: vscode.Uri.parse('file:///test'),
         globalState: {
-          get: sandbox.stub(),
-          update: sandbox.stub()
+          get: jest.fn(),
+          update: jest.fn()
         },
         workspaceState: {
-          get: sandbox.stub(),
-          update: sandbox.stub()
+          get: jest.fn(),
+          update: jest.fn()
         }
       } as any;
 
       // Mock VS Code APIs
-      const registerTreeDataProviderStub = sandbox.stub(vscode.window, 'registerTreeDataProvider');
-      const registerCommandStub = sandbox.stub(vscode.commands, 'registerCommand');
+      const registerTreeDataProviderSpy = jest.spyOn(vscode.window, 'registerTreeDataProvider');
+      const registerCommandSpy = jest.spyOn(vscode.commands, 'registerCommand');
 
       // Import and activate extension
       const { activate } = await import('../../src/extension');
       await activate(context);
 
-      assert(registerTreeDataProviderStub.called, 'Tree data provider should be registered');
-      assert(registerCommandStub.called, 'Commands should be registered');
-      assert(context.subscriptions.length > 0, 'Extension should register disposables');
+      expect(registerTreeDataProviderSpy).toHaveBeenCalled();
+      expect(registerCommandSpy).toHaveBeenCalled();
+      expect(context.subscriptions.length).toBeGreaterThan(0);
     });
 
-    test('should register all required commands', async () => {
+    it('should register all required commands', async () => {
       const context = { subscriptions: [] } as any;
-      const registerCommandStub = sandbox.stub(vscode.commands, 'registerCommand');
+      const registerCommandSpy = jest.spyOn(vscode.commands, 'registerCommand');
 
       const { activate } = await import('../../src/extension');
       await activate(context);
@@ -63,25 +51,25 @@ suite('Azure DevOps PR Reviewer Extension Tests', () => {
       ];
 
       expectedCommands.forEach(command => {
-        assert(registerCommandStub.calledWith(command), `Command ${command} should be registered`);
+        expect(registerCommandSpy).toHaveBeenCalledWith(command, expect.any(Function));
       });
     });
   });
 
-  suite('Configuration Manager', () => {
+  describe('Configuration Manager', () => {
     let configManager: ConfigurationManager;
     let secretStorageMock: any;
 
-    setup(() => {
+    beforeEach(() => {
       secretStorageMock = {
-        get: sandbox.stub(),
-        store: sandbox.stub(),
-        delete: sandbox.stub()
+        get: jest.fn(),
+        store: jest.fn(),
+        delete: jest.fn()
       };
       configManager = new ConfigurationManager(secretStorageMock);
     });
 
-    test('should validate organization URL format', async () => {
+    it('should validate organization URL format', async () => {
       const validUrls = [
         'https://dev.azure.com/organization',
         'https://organization.visualstudio.com'
@@ -95,48 +83,48 @@ suite('Azure DevOps PR Reviewer Extension Tests', () => {
 
       for (const url of validUrls) {
         const result = await configManager.validateOrganizationUrl(url);
-        assert.strictEqual(result.isValid, true, `URL ${url} should be valid`);
+        expect(result.isValid).toBe(true);
       }
 
       for (const url of invalidUrls) {
         const result = await configManager.validateOrganizationUrl(url);
-        assert.strictEqual(result.isValid, false, `URL ${url} should be invalid`);
+        expect(result.isValid).toBe(false);
       }
     });
 
-    test('should store and retrieve PAT securely', async () => {
+    it('should store and retrieve PAT securely', async () => {
       const testPat = 'test-personal-access-token';
-      secretStorageMock.get.resolves(testPat);
+      secretStorageMock.get.mockResolvedValue(testPat);
 
       await configManager.storePat(testPat);
       const retrievedPat = await configManager.getPat();
 
-      assert(secretStorageMock.store.calledWith('adoPat', testPat), 'PAT should be stored in secret storage');
-      assert.strictEqual(retrievedPat, testPat, 'Retrieved PAT should match stored PAT');
+      expect(secretStorageMock.store).toHaveBeenCalledWith('adoPat', testPat);
+      expect(retrievedPat).toBe(testPat);
     });
 
-    test('should handle missing configuration gracefully', async () => {
-      secretStorageMock.get.resolves(undefined);
+    it('should handle missing configuration gracefully', async () => {
+      secretStorageMock.get.mockResolvedValue(undefined);
 
       const config = await configManager.getConfiguration();
 
-      assert.strictEqual(config.organizationUrl, undefined, 'Organization URL should be undefined when not configured');
-      assert.strictEqual(config.project, undefined, 'Project should be undefined when not configured');
-      assert.strictEqual(config.pat, undefined, 'PAT should be undefined when not configured');
+      expect(config.organizationUrl).toBeUndefined();
+      expect(config.project).toBeUndefined();
+      expect(config.pat).toBeUndefined();
     });
   });
 
-  suite('Azure DevOps API', () => {
+  describe('Azure DevOps API', () => {
     let api: AzureDevOpsApi;
-    let httpStub: sinon.SinonStub;
+    let httpMock: jest.Mock;
 
-    setup(() => {
-      httpStub = sandbox.stub();
+    beforeEach(() => {
+      httpMock = jest.fn();
       api = new AzureDevOpsApi('https://dev.azure.com/test', 'TestProject', 'test-pat');
-      (api as any).httpClient = { get: httpStub, post: httpStub, patch: httpStub };
+      (api as any).httpClient = { get: httpMock, post: httpMock, patch: httpMock };
     });
 
-    test('should fetch pull requests with correct API call', async () => {
+    it('should fetch pull requests with correct API call', async () => {
       const mockResponse = {
         value: [
           {
@@ -151,43 +139,33 @@ suite('Azure DevOps PR Reviewer Extension Tests', () => {
         ]
       };
 
-      httpStub.resolves({ data: mockResponse });
+      httpMock.mockResolvedValue({ data: mockResponse });
 
       const pullRequests = await api.getPullRequests();
 
-      assert(httpStub.called, 'HTTP GET should be called');
-      assert.strictEqual(pullRequests.length, 1, 'Should return one pull request');
-      assert.strictEqual(pullRequests[0].title, 'Test PR', 'PR title should match');
+      expect(httpMock).toHaveBeenCalled();
+      expect(pullRequests).toHaveLength(1);
+      expect(pullRequests[0].title).toBe('Test PR');
     });
 
-    test('should handle API rate limiting', async () => {
-      httpStub.rejects({
+    it('should handle API rate limiting', async () => {
+      httpMock.mockRejectedValue({
         response: {
           status: 429,
           headers: { 'retry-after': '60' }
         }
       });
 
-      try {
-        await api.getPullRequests();
-        assert.fail('Should throw rate limit error');
-      } catch (error: any) {
-        assert.strictEqual(error.message, 'Rate limit exceeded. Retry after 60 seconds.');
-      }
+      await expect(api.getPullRequests()).rejects.toThrow('Rate limit exceeded. Retry after 60 seconds.');
     });
 
-    test('should handle network errors gracefully', async () => {
-      httpStub.rejects(new Error('Network error'));
+    it('should handle network errors gracefully', async () => {
+      httpMock.mockRejectedValue(new Error('Network error'));
 
-      try {
-        await api.getPullRequests();
-        assert.fail('Should throw network error');
-      } catch (error: any) {
-        assert(error.message.includes('Network error'), 'Should propagate network error');
-      }
+      await expect(api.getPullRequests()).rejects.toThrow('Network error');
     });
 
-    test('should validate PAT permissions', async () => {
+    it('should validate PAT permissions', async () => {
       const mockPermissionsResponse = {
         value: [
           { bit: 1, name: 'Read' },
@@ -195,42 +173,42 @@ suite('Azure DevOps PR Reviewer Extension Tests', () => {
         ]
       };
 
-      httpStub.resolves({ data: mockPermissionsResponse });
+      httpMock.mockResolvedValue({ data: mockPermissionsResponse });
 
       const permissions = await api.validatePermissions();
 
-      assert(permissions.canRead, 'Should have read permissions');
-      assert(permissions.canContribute, 'Should have contribute permissions');
-      assert(!permissions.canAdminister, 'Should not have admin permissions');
+      expect(permissions.canRead).toBe(true);
+      expect(permissions.canContribute).toBe(true);
+      expect(permissions.canAdminister).toBe(false);
     });
   });
 
-  suite('ADO PR Provider', () => {
+  describe('ADO PR Provider', () => {
     let provider: AdoPrProvider;
     let apiMock: any;
     let configMock: any;
 
-    setup(() => {
+    beforeEach(() => {
       apiMock = {
-        getPullRequests: sandbox.stub(),
-        approvePullRequest: sandbox.stub(),
-        rejectPullRequest: sandbox.stub(),
-        addComment: sandbox.stub()
+        getPullRequests: jest.fn(),
+        approvePullRequest: jest.fn(),
+        rejectPullRequest: jest.fn(),
+        addComment: jest.fn()
       };
 
       configMock = {
-        getConfiguration: sandbox.stub().resolves({
+        getConfiguration: jest.fn().mockResolvedValue({
           organizationUrl: 'https://dev.azure.com/test',
           project: 'TestProject',
           pat: 'test-pat'
         }),
-        isConfigured: sandbox.stub().returns(true)
+        isConfigured: jest.fn().mockReturnValue(true)
       };
 
       provider = new AdoPrProvider(configMock, apiMock);
     });
 
-    test('should load pull requests and create tree items', async () => {
+    it('should load pull requests and create tree items', async () => {
       const mockPrs = [
         {
           pullRequestId: 1,
@@ -246,108 +224,101 @@ suite('Azure DevOps PR Reviewer Extension Tests', () => {
         }
       ];
 
-      apiMock.getPullRequests.resolves(mockPrs);
+      apiMock.getPullRequests.mockResolvedValue(mockPrs);
 
       const children = await provider.getChildren();
 
-      assert.strictEqual(children.length, 2, 'Should return two tree items');
-      assert.strictEqual(children[0].label, 'Test PR 1', 'First item should have correct label');
-      assert.strictEqual(children[1].label, 'Test PR 2', 'Second item should have correct label');
+      expect(children).toHaveLength(2);
+      expect(children[0].label).toBe('Test PR 1');
+      expect(children[1].label).toBe('Test PR 2');
     });
 
-    test('should handle empty pull request list', async () => {
-      apiMock.getPullRequests.resolves([]);
+    it('should handle empty pull request list', async () => {
+      apiMock.getPullRequests.mockResolvedValue([]);
 
       const children = await provider.getChildren();
 
-      assert.strictEqual(children.length, 0, 'Should return empty array for no PRs');
+      expect(children).toHaveLength(0);
     });
 
-    test('should refresh data when requested', async () => {
-      apiMock.getPullRequests.resolves([]);
+    it('should refresh data when requested', async () => {
+      apiMock.getPullRequests.mockResolvedValue([]);
 
       await provider.refresh();
 
-      assert(apiMock.getPullRequests.called, 'Should call API to refresh data');
+      expect(apiMock.getPullRequests).toHaveBeenCalled();
     });
 
-    test('should handle API errors during refresh', async () => {
-      apiMock.getPullRequests.rejects(new Error('API Error'));
+    it('should handle API errors during refresh', async () => {
+      apiMock.getPullRequests.mockRejectedValue(new Error('API Error'));
 
-      try {
-        await provider.refresh();
-        assert.fail('Should throw API error');
-      } catch (error: any) {
-        assert(error.message.includes('API Error'), 'Should propagate API error');
-      }
+      await expect(provider.refresh()).rejects.toThrow('API Error');
     });
   });
 
-  suite('Telemetry Service', () => {
+  describe('Telemetry Service', () => {
     let telemetryService: TelemetryService;
     let telemetryReporter: any;
 
-    setup(() => {
+    beforeEach(() => {
       telemetryReporter = {
-        sendTelemetryEvent: sandbox.stub(),
-        sendTelemetryErrorEvent: sandbox.stub()
+        sendTelemetryEvent: jest.fn(),
+        sendTelemetryErrorEvent: jest.fn()
       };
       telemetryService = new TelemetryService(telemetryReporter);
     });
 
-    test('should track command execution', () => {
+    it('should track command execution', () => {
       telemetryService.trackCommand('azureDevOps.approvePullRequest', { prId: '123' });
 
-      assert(telemetryReporter.sendTelemetryEvent.calledWith(
+      expect(telemetryReporter.sendTelemetryEvent).toHaveBeenCalledWith(
         'command.executed',
         { commandId: 'azureDevOps.approvePullRequest', prId: '123' }
-      ), 'Should send telemetry event for command execution');
+      );
     });
 
-    test('should track errors with context', () => {
+    it('should track errors with context', () => {
       const error = new Error('Test error');
       telemetryService.trackError('api.error', error, { operation: 'getPullRequests' });
 
-      assert(telemetryReporter.sendTelemetryErrorEvent.calledWith(
+      expect(telemetryReporter.sendTelemetryErrorEvent).toHaveBeenCalledWith(
         'api.error',
         { operation: 'getPullRequests' },
         { error: 'Test error' }
-      ), 'Should send error telemetry with context');
+      );
     });
 
-    test('should respect user opt-out preferences', () => {
+    it('should respect user opt-out preferences', () => {
       telemetryService = new TelemetryService(telemetryReporter, false);
 
       telemetryService.trackCommand('test.command');
 
-      assert(!telemetryReporter.sendTelemetryEvent.called, 'Should not send telemetry when opted out');
+      expect(telemetryReporter.sendTelemetryEvent).not.toHaveBeenCalled();
     });
   });
 
-  suite('Performance Tests', () => {
-    test('should initialize extension within 5 seconds', async function () {
-      this.timeout(5000);
-
+  describe('Performance Tests', () => {
+    it('should initialize extension within 5 seconds', async () => {
       const context = {
         subscriptions: [],
         extensionUri: vscode.Uri.parse('file:///test'),
-        globalState: { get: sandbox.stub(), update: sandbox.stub() },
-        workspaceState: { get: sandbox.stub(), update: sandbox.stub() }
+        globalState: { get: jest.fn(), update: jest.fn() },
+        workspaceState: { get: jest.fn(), update: jest.fn() }
       } as any;
 
       // Mock all VS Code APIs to prevent actual registration
-      sandbox.stub(vscode.window, 'registerTreeDataProvider');
-      sandbox.stub(vscode.commands, 'registerCommand');
+      jest.spyOn(vscode.window, 'registerTreeDataProvider').mockImplementation(() => ({} as any));
+      jest.spyOn(vscode.commands, 'registerCommand').mockImplementation(() => ({} as any));
 
       const start = Date.now();
       const { activate } = await import('../../src/extension');
       await activate(context);
       const duration = Date.now() - start;
 
-      assert(duration < 5000, `Extension should activate in under 5 seconds, took ${duration}ms`);
+      expect(duration).toBeLessThan(5000);
     });
 
-    test('should handle large PR lists efficiently', async () => {
+    it('should handle large PR lists efficiently', async () => {
       const largePrList = Array.from({ length: 1000 }, (_, i) => ({
         pullRequestId: i + 1,
         title: `PR ${i + 1}`,
@@ -356,16 +327,16 @@ suite('Azure DevOps PR Reviewer Extension Tests', () => {
       }));
 
       const api = {
-        getPullRequests: sandbox.stub().resolves(largePrList)
+        getPullRequests: jest.fn().mockResolvedValue(largePrList)
       };
 
       const config = {
-        getConfiguration: sandbox.stub().resolves({
+        getConfiguration: jest.fn().mockResolvedValue({
           organizationUrl: 'https://dev.azure.com/test',
           project: 'TestProject',
           pat: 'test-pat'
         }),
-        isConfigured: sandbox.stub().returns(true)
+        isConfigured: jest.fn().mockReturnValue(true)
       };
 
       const provider = new AdoPrProvider(config, api);
@@ -374,8 +345,8 @@ suite('Azure DevOps PR Reviewer Extension Tests', () => {
       const children = await provider.getChildren();
       const duration = Date.now() - start;
 
-      assert.strictEqual(children.length, 1000, 'Should handle 1000 PRs');
-      assert(duration < 1000, `Large PR list should render in under 1 second, took ${duration}ms`);
+      expect(children).toHaveLength(1000);
+      expect(duration).toBeLessThan(1000);
     });
   });
 });
