@@ -21,7 +21,8 @@
   ],
   "activationEvents": [
     "onCommand:azureDevOps.configure",
-    "onView:azureDevOpsPRs"
+    "onView:azureDevOpsPRs",
+    "onCommand:azureDevOps.loadTest.*"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -75,6 +76,56 @@
         "command": "azureDevOps.openPullRequest",
         "title": "Open Pull Request Details",
         "category": "Azure DevOps"
+      },
+      {
+        "command": "azureDevOps.loadTest.runApiPerformance",
+        "title": "Run API Performance Load Test",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.runUiResponsiveness",
+        "title": "Run UI Responsiveness Load Test",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.runMemoryUsage",
+        "title": "Run Memory Usage Load Test",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.runConcurrency",
+        "title": "Run Concurrency Load Test",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.runScalability",
+        "title": "Run Scalability Load Test",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.runRealWorld",
+        "title": "Run Real-world Simulation Load Test",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.runAllTests",
+        "title": "Run Comprehensive Load Test Suite",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.runCustomTest",
+        "title": "Run Custom Load Test",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.showResults",
+        "title": "Show Load Test Results",
+        "category": "Azure DevOps Load Testing"
+      },
+      {
+        "command": "azureDevOps.loadTest.exportResults",
+        "title": "Export Load Test Results",
+        "category": "Azure DevOps Load Testing"
       }
     ],
     "menus": {

@@ -7,6 +7,7 @@ import { ConfigurationService } from "./services/ConfigurationService";
 import { AuthenticationService } from "./services/AuthenticationService";
 import { TelemetryService } from "./services/TelemetryService";
 import { AzureDevOpsApiClient } from "./api/AzureDevOpsApiClient";
+import { LoadTestCommands } from "./commands/LoadTestCommands";
 
 /**
  * Extension activation entry point
@@ -49,6 +50,9 @@ export async function activate(
     // Initialize extension controller
     const extensionController = new ExtensionController(context, apiClient);
 
+    // Initialize load testing commands
+    const loadTestCommands = new LoadTestCommands(context);
+
     // Register webview command
     const disposable = vscode.commands.registerCommand(
       "azureDevOps.openPullRequest",
@@ -76,7 +80,7 @@ export async function activate(
       }
     );
 
-    context.subscriptions.push(extensionController, disposable);
+    context.subscriptions.push(extensionController, loadTestCommands, disposable);
 
     // Track activation event
     telemetryService.trackEvent("extensionActivated");

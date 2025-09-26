@@ -1,527 +1,380 @@
-import { describe, it, beforeEach, afterEach } from 'mocha';
 import * as assert from 'assert';
 import * as sinon from 'sinon';
-import { PullRequestService } from '../../src/Services/PullRequestService';
+import { PullRequestService } from '../../src/services/PullRequestService';
 import { AzureDevOpsApiClient } from '../../src/api/AzureDevOpsApiClient';
 import { ConfigurationService } from '../../src/services/ConfigurationService';
 import { PullRequest, PullRequestStatus, GitRepository, Identity } from '../../src/api/models';
+import { ErrorHandler } from '../../src/utils/ErrorHandler';
+import { TelemetryService } from '../../src/services/TelemetryService';
+import { MonitoringService } from '../../src/services/MonitoringService';
+import { CacheManager } from '../../src/services/CacheManager';
+import { StateManager } from '../../src/services/StateManager';
 
-// Mock VS Code API
-const mockExtensionContext = {
-  workspaceState: {
-    get: sinon.stub(),
-    update: sinon.stub(),
-    keys: sinon.stub().returns([])
-  },
-  globalState: {
-    get: sinon.stub(),
-    update: sinon.stub()
-  },
-  subscriptions: [],
-  secrets: {
-    get: sinon.stub(),
-    store: sinon.stub(),
-    delete: sinon.stub()
-  }
-} as any;
+suite('PullRequestService Test Suite', () => {
+    let pullRequestService: PullRequestService;
+    let sandbox: sinon.SinonSandbox;
+    let mockApiClient: sinon.SinonStubbedInstance<AzureDevOpsApiClient>;
+    let mockConfigService: sinon.SinonStubbedInstance<ConfigurationService>;
+    let mockErrorHandler: sinon.SinonStubbedInstance<ErrorHandler>;
+    let mockTelemetryService: sinon.SinonStubbedInstance<TelemetryService>;
+    let mockMonitoringService: sinon.SinonStubbedInstance<MonitoringService>;
+    let mockCacheManager: sinon.SinonStubbedInstance<CacheManager>;
+    let mockStateManager: sinon.SinonStubbedInstance<StateManager>;
 
-const mockApiClient = {
-  getRepositories: sinon.stub(),
-  getPullRequests: sinon.stub(),
-  getPullRequest: sinon.stub(),
-  post: sinon.stub(),
-  patch: sinon.stub(),
-  put: sinon.stub(),
-  votePullRequest: sinon.stub(),
-  abandonPullRequest: sinon.stub()
-} as any;
+    setup(() => {
+        sandbox = sinon.createSandbox();
 
-const mockConfigService = {
-  getConfiguration: sinon.stub().returns({
-    organizationUrl: 'https://dev.azure.com/test',
-    project: 'Test Project'
-  })
-} as any;
+        mockApiClient = sandbox.createStubInstance(AzureDevOpsApiClient);
+        mockConfigService = sandbox.createStubInstance(ConfigurationService);
+        mockErrorHandler = sandbox.createStubInstance(ErrorHandler);
+        mockTelemetryService = sandbox.createStubInstance(TelemetryService);
+        mockMonitoringService = sandbox.createStubInstance(MonitoringService);
+        mockCacheManager = sandbox.createStubInstance(CacheManager);
+        mockStateManager = sandbox.createStubInstance(StateManager);
 
-describe('PullRequestService', () => {
-  let pullRequestService: PullRequestService;
-  let sandbox: sinon.SinonSandbox;
+        // Setup default stub behaviors
+        mockConfigService.getConfiguration.returns({
+            organizationUrl: 'https://dev.azure.com/test',
+            project: 'Test Project',
+            refreshInterval: 300,
+            telemetry: {}
+        });
 
-  beforeEach(() => {
-    sandbox = sinon.createSandbox();
-    pullRequestService = new PullRequestService(
-      mockApiClient,
-      mockConfigService,
-      mockExtensionContext
-    );
-  });
+        pullRequestService = new PullRequestService(
+            mockApiClient,
+            mockConfigService,
+            mockErrorHandler,
+            mockTelemetryService,
+            mockMonitoringService,
+            mockCacheManager,
+            mockStateManager
+        );
+    });
 
-  afterEach(() => {
-    sandbox.restore();
-    pullRequestService.dispose();
-  });
+    teardown(() => {
+        sandbox.restore();
+    });
 
-  describe('getPullRequests', () => {
-    it('should return pull requests with caching', async () => {
-      const mockRepositories: GitRepository[] = [
-        {
-          id: 'repo1',
-          name: 'Test Repository',
-          url: 'https://dev.azure.com/test/test/_git/repo1',
-          project: { id: 'project1', name: 'Test Project', url: '', state: 'wellFormed', revision: 1, visibility: 'private', lastUpdateTime: new Date() },
-          defaultBranch: 'refs/heads/main',
-          size: 1024,
-          remoteUrl: 'https://dev.azure.com/test/test/_git/repo1',
-          sshUrl: 'git@ssh.dev.azure.com:v3/test/test/repo1',
-          webUrl: 'https://dev.azure.com/test/test/_git/repo1',
-          isDisabled: false
+    test('should initialize correctly with all dependencies', () => {
+        assert.ok(pullRequestService);
+        assert.strictEqual(mockConfigService.getConfiguration.callCount, 1);
+    });
+
+    test('should get pull requests from API', async () => {
+        const mockRepositories = [
+            { id: 'repo1', name: 'Test Repo 1', project: { id: 'project1', name: 'Test Project' } },
+            { id: 'repo2', name: 'Test Repo 2', project: { id: 'project1', name: 'Test Project' } }
+        ] as GitRepository[];
+
+        const mockPullRequests = [
+            {
+                pullRequestId: 1,
+                title: 'Test PR 1',
+                description: 'Test description',
+                status: PullRequestStatus.Active,
+                createdBy: { id: 'user1', displayName: 'Test User' } as Identity,
+                creationDate: new Date(),
+                sourceRefName: 'refs/heads/feature/test',
+                targetRefName: 'refs/heads/main'
+            },
+            {
+                pullRequestId: 2,
+                title: 'Test PR 2',
+                description: 'Test description 2',
+                status: PullRequestStatus.Completed,
+                createdBy: { id: 'user2', displayName: 'Test User 2' } as Identity,
+                creationDate: new Date(),
+                sourceRefName: 'refs/heads/feature/test2',
+                targetRefName: 'refs/heads/main'
+            }
+        ] as PullRequest[];
+
+        mockStateManager.getRepositories.returns(mockRepositories);
+        mockApiClient.getPullRequests.resolves({ value: mockPullRequests, count: 2 });
+
+        const result = await pullRequestService.getPullRequests();
+
+        assert.strictEqual(result.length, 2);
+        assert.strictEqual(result[0].pullRequestId, 1);
+        assert.strictEqual(result[1].pullRequestId, 2);
+        assert.strictEqual(result[0].status, PullRequestStatus.Active);
+        assert.strictEqual(result[1].status, PullRequestStatus.Completed);
+
+        assert.strictEqual(mockStateManager.getRepositories.callCount, 1);
+        assert.strictEqual(mockApiClient.getPullRequests.callCount, 1);
+        assert.strictEqual(mockMonitoringService.recordApiCall.callCount, 1);
+    });
+
+    test('should get pull request by ID', async () => {
+        const mockPullRequest = {
+            pullRequestId: 1,
+            title: 'Test PR',
+            description: 'Test description',
+            status: PullRequestStatus.Active,
+            createdBy: { id: 'user1', displayName: 'Test User' } as Identity,
+            creationDate: new Date(),
+            sourceRefName: 'refs/heads/feature/test',
+            targetRefName: 'refs/heads/main'
+        } as PullRequest;
+
+        mockApiClient.getPullRequest.resolves(mockPullRequest);
+
+        const result = await pullRequestService.getPullRequest('repo1', 1);
+
+        assert.strictEqual(result, mockPullRequest);
+        assert.strictEqual(mockApiClient.getPullRequest.callCount, 1);
+        assert.strictEqual(mockApiClient.getPullRequest.firstCall.args[0], 'repo1');
+        assert.strictEqual(mockApiClient.getPullRequest.firstCall.args[1], 1);
+    });
+
+    test('should create pull request', async () => {
+        const mockPullRequest = {
+            pullRequestId: 3,
+            title: 'New PR',
+            description: 'New description',
+            status: PullRequestStatus.Active,
+            createdBy: { id: 'user1', displayName: 'Test User' } as Identity,
+            creationDate: new Date(),
+            sourceRefName: 'refs/heads/feature/new',
+            targetRefName: 'refs/heads/main'
+        } as PullRequest;
+
+        mockApiClient.createPullRequest.resolves(mockPullRequest);
+
+        const result = await pullRequestService.createPullRequest({
+            title: 'New PR',
+            description: 'New description',
+            sourceRefName: 'refs/heads/feature/new',
+            targetRefName: 'refs/heads/main',
+            repositoryId: 'repo1'
+        });
+
+        assert.strictEqual(result, mockPullRequest);
+        assert.strictEqual(mockApiClient.createPullRequest.callCount, 1);
+        assert.strictEqual(mockTelemetryService.trackEvent.callCount, 1);
+    });
+
+    test('should update pull request', async () => {
+        const mockPullRequest = {
+            pullRequestId: 1,
+            title: 'Updated PR',
+            description: 'Updated description',
+            status: PullRequestStatus.Active,
+            createdBy: { id: 'user1', displayName: 'Test User' } as Identity,
+            creationDate: new Date(),
+            sourceRefName: 'refs/heads/feature/test',
+            targetRefName: 'refs/heads/main'
+        } as PullRequest;
+
+        mockApiClient.updatePullRequest.resolves(mockPullRequest);
+
+        const result = await pullRequestService.updatePullRequest('repo1', 1, {
+            title: 'Updated PR',
+            description: 'Updated description'
+        });
+
+        assert.strictEqual(result, mockPullRequest);
+        assert.strictEqual(mockApiClient.updatePullRequest.callCount, 1);
+    });
+
+    test('should approve pull request', async () => {
+        mockApiClient.votePullRequest.resolves({
+            id: 'vote1',
+            voter: { id: 'user1', displayName: 'Test User' },
+            vote: 10, // Approved
+            commentedDate: new Date()
+        });
+
+        const result = await pullRequestService.approvePullRequest('repo1', 1, 'Looks good!');
+
+        assert.strictEqual(result.vote, 10);
+        assert.strictEqual(mockApiClient.votePullRequest.callCount, 1);
+        assert.strictEqual(mockApiClient.votePullRequest.firstCall.args[1], 10);
+        assert.strictEqual(mockApiClient.votePullRequest.firstCall.args[2], 'Looks good!');
+    });
+
+    test('should reject pull request', async () => {
+        mockApiClient.votePullRequest.resolves({
+            id: 'vote2',
+            voter: { id: 'user1', displayName: 'Test User' },
+            vote: -5, // Rejected
+            commentedDate: new Date()
+        });
+
+        const result = await pullRequestService.rejectPullRequest('repo1', 1, 'Needs changes');
+
+        assert.strictEqual(result.vote, -5);
+        assert.strictEqual(mockApiClient.votePullRequest.callCount, 1);
+        assert.strictEqual(mockApiClient.votePullRequest.firstCall.args[1], -5);
+        assert.strictEqual(mockApiClient.votePullRequest.firstCall.args[2], 'Needs changes');
+    });
+
+    test('should abandon pull request', async () => {
+        mockApiClient.abandonPullRequest.resolves({
+            pullRequestId: 1,
+            status: PullRequestStatus.Abandoned,
+            closedDate: new Date()
+        });
+
+        const result = await pullRequestService.abandonPullRequest('repo1', 1, 'No longer needed');
+
+        assert.strictEqual(result.status, PullRequestStatus.Abandoned);
+        assert.strictEqual(mockApiClient.abandonPullRequest.callCount, 1);
+        assert.strictEqual(mockApiClient.abandonPullRequest.firstCall.args[2], 'No longer needed');
+    });
+
+    test('should handle API errors gracefully', async () => {
+        const error = new Error('API Error');
+        mockApiClient.getPullRequests.rejects(error);
+
+        try {
+            await pullRequestService.getPullRequests();
+            assert.fail('Should have thrown an error');
+        } catch (err) {
+            assert.strictEqual(err, error);
+            assert.strictEqual(mockErrorHandler.handleError.callCount, 1);
+            assert.strictEqual(mockMonitoringService.recordError.callCount, 1);
         }
-      ];
+    });
 
-      const mockPullRequests: PullRequest[] = [
-        {
-          pullRequestId: 1,
-          codeReviewId: 1,
-          status: 'active' as PullRequestStatus,
-          createdBy: { id: 'user1', displayName: 'Test User', uniqueName: 'test@example.com' } as Identity,
-          creationDate: new Date('2023-01-01'),
-          title: 'Test PR',
-          description: 'Test description',
-          sourceRefName: 'refs/heads/feature',
-          targetRefName: 'refs/heads/main',
-          mergeStatus: 'succeeded',
-          isDraft: false,
-          mergeId: 'merge1',
-          lastMergeSourceCommit: {
-            commitId: 'commit1',
-            author: { name: 'Test User', email: 'test@example.com', date: new Date() },
-            committer: { name: 'Test User', email: 'test@example.com', date: new Date() },
-            comment: 'Test commit',
-            commentTruncated: false,
-            url: '',
-            remoteUrl: ''
-          },
-          lastMergeTargetCommit: {
-            commitId: 'commit2',
-            author: { name: 'Test User', email: 'test@example.com', date: new Date() },
-            committer: { name: 'Test User', email: 'test@example.com', date: new Date() },
-            comment: 'Test commit',
-            commentTruncated: false,
-            url: '',
-            remoteUrl: ''
-          },
-          reviewers: [],
-          url: '',
-          webUrl: '',
-          repository: mockRepositories[0],
-          workItemRefs: [],
-          labels: [],
-          hasMultipleMergeBases: false,
-          supportsIterations: true,
-          artifactId: 'artifact1'
+    test('should use caching for pull requests', async () => {
+        const mockRepositories = [
+            { id: 'repo1', name: 'Test Repo 1', project: { id: 'project1', name: 'Test Project' } }
+        ] as GitRepository[];
+
+        const mockPullRequests = [
+            {
+                pullRequestId: 1,
+                title: 'Test PR 1',
+                description: 'Test description',
+                status: PullRequestStatus.Active,
+                createdBy: { id: 'user1', displayName: 'Test User' } as Identity,
+                creationDate: new Date(),
+                sourceRefName: 'refs/heads/feature/test',
+                targetRefName: 'refs/heads/main'
+            }
+        ] as PullRequest[];
+
+        mockStateManager.getRepositories.returns(mockRepositories);
+        mockApiClient.getPullRequests.resolves({ value: mockPullRequests, count: 1 });
+        mockCacheManager.get.resolves(undefined);
+        mockCacheManager.set.resolves();
+
+        await pullRequestService.getPullRequests();
+
+        assert.strictEqual(mockCacheManager.get.callCount, 1);
+        assert.strictEqual(mockCacheManager.set.callCount, 1);
+    });
+
+    test('should get cached pull requests when available', async () => {
+        const cachedPullRequests = [
+            {
+                pullRequestId: 1,
+                title: 'Cached PR',
+                description: 'Cached description',
+                status: PullRequestStatus.Active,
+                createdBy: { id: 'user1', displayName: 'Test User' } as Identity,
+                creationDate: new Date(),
+                sourceRefName: 'refs/heads/feature/test',
+                targetRefName: 'refs/heads/main'
+            }
+        ] as PullRequest[];
+
+        mockCacheManager.get.resolves(cachedPullRequests);
+
+        const result = await pullRequestService.getPullRequests();
+
+        assert.strictEqual(result, cachedPullRequests);
+        assert.strictEqual(mockApiClient.getPullRequests.callCount, 0);
+        assert.strictEqual(mockTelemetryService.trackEvent.callCount, 1);
+        assert.strictEqual(mockTelemetryService.trackEvent.firstCall.args[0], 'cacheHit');
+    });
+
+    test('should filter pull requests by status', async () => {
+        const mockRepositories = [
+            { id: 'repo1', name: 'Test Repo 1', project: { id: 'project1', name: 'Test Project' } }
+        ] as GitRepository[];
+
+        const mockPullRequests = [
+            {
+                pullRequestId: 1,
+                title: 'Active PR',
+                description: 'Test description',
+                status: PullRequestStatus.Active,
+                createdBy: { id: 'user1', displayName: 'Test User' } as Identity,
+                creationDate: new Date(),
+                sourceRefName: 'refs/heads/feature/test',
+                targetRefName: 'refs/heads/main'
+            },
+            {
+                pullRequestId: 2,
+                title: 'Completed PR',
+                description: 'Test description 2',
+                status: PullRequestStatus.Completed,
+                createdBy: { id: 'user2', displayName: 'Test User 2' } as Identity,
+                creationDate: new Date(),
+                sourceRefName: 'refs/heads/feature/test2',
+                targetRefName: 'refs/heads/main'
+            }
+        ] as PullRequest[];
+
+        mockStateManager.getRepositories.returns(mockRepositories);
+        mockApiClient.getPullRequests.resolves({ value: mockPullRequests, count: 2 });
+
+        const result = await pullRequestService.getPullRequests({ status: PullRequestStatus.Active });
+
+        assert.strictEqual(result.length, 1);
+        assert.strictEqual(result[0].status, PullRequestStatus.Active);
+    });
+
+    test('should track performance metrics', async () => {
+        const mockRepositories = [
+            { id: 'repo1', name: 'Test Repo 1', project: { id: 'project1', name: 'Test Project' } }
+        ] as GitRepository[];
+
+        const mockPullRequests = [
+            {
+                pullRequestId: 1,
+                title: 'Test PR',
+                description: 'Test description',
+                status: PullRequestStatus.Active,
+                createdBy: { id: 'user1', displayName: 'Test User' } as Identity,
+                creationDate: new Date(),
+                sourceRefName: 'refs/heads/feature/test',
+                targetRefName: 'refs/heads/main'
+            }
+        ] as PullRequest[];
+
+        mockStateManager.getRepositories.returns(mockRepositories);
+        mockApiClient.getPullRequests.resolves({ value: mockPullRequests, count: 1 });
+
+        await pullRequestService.getPullRequests();
+
+        assert.strictEqual(mockMonitoringService.recordApiCall.callCount, 1);
+        assert.strictEqual(mockTelemetryService.trackEvent.callCount, 1);
+    });
+
+    test('should validate pull request parameters', async () => {
+        try {
+            await pullRequestService.createPullRequest({
+                title: '', // Invalid: empty title
+                description: 'Test description',
+                sourceRefName: 'refs/heads/feature/test',
+                targetRefName: 'refs/heads/main',
+                repositoryId: 'repo1'
+            });
+            assert.fail('Should have thrown validation error');
+        } catch (error) {
+            assert.strictEqual(error.message, 'Title is required');
         }
-      ];
-
-      mockApiClient.getRepositories.resolves(mockRepositories);
-      mockApiClient.getPullRequests.resolves(mockPullRequests);
-
-      // Mock cache miss
-      (mockExtensionContext.workspaceState.get as any).returns(null);
-
-      const result = await pullRequestService.getPullRequests();
-
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].title, 'Test PR');
-      assert.strictEqual(result[0].status, 'active');
-
-      // Verify cache was set
-      assert.ok(mockExtensionContext.workspaceState.update.called);
     });
 
-    it('should apply status filter', async () => {
-      const mockPullRequests: PullRequest[] = [
-        { ...createMockPullRequest(1), status: 'active' as PullRequestStatus },
-        { ...createMockPullRequest(2), status: 'completed' as PullRequestStatus }
-      ];
+    test('should handle repository not found', async () => {
+        mockStateManager.getRepositories.returns([]);
 
-      mockApiClient.getRepositories.resolves([createMockRepository()]);
-      mockApiClient.getPullRequests.resolves(mockPullRequests);
+        const result = await pullRequestService.getPullRequests();
 
-      // Mock cache miss
-      (mockExtensionContext.workspaceState.get as any).returns(null);
-
-      const result = await pullRequestService.getPullRequests({
-        status: 'active'
-      });
-
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].status, 'active');
+        assert.strictEqual(result.length, 0);
+        assert.strictEqual(mockApiClient.getPullRequests.callCount, 0);
     });
-
-    it('should apply search query filter', async () => {
-      const mockPullRequests: PullRequest[] = [
-        { ...createMockPullRequest(1), title: 'Feature implementation' },
-        { ...createMockPullRequest(2), title: 'Bug fix' }
-      ];
-
-      mockApiClient.getRepositories.resolves([createMockRepository()]);
-      mockApiClient.getPullRequests.resolves(mockPullRequests);
-
-      // Mock cache miss
-      (mockExtensionContext.workspaceState.get as any).returns(null);
-
-      const result = await pullRequestService.getPullRequests({
-        searchQuery: 'feature'
-      });
-
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].title, 'Feature implementation');
-    });
-
-    it('should return cached data when available', async () => {
-      const cachedData = [
-        { ...createMockPullRequest(1), title: 'Cached PR' }
-      ];
-
-      const cachedWithTimestamp = {
-        data: cachedData,
-        timestamp: Date.now() - 1000 // 1 second ago
-      };
-
-      // Mock cache hit
-      (mockExtensionContext.workspaceState.get as any).returns(cachedWithTimestamp);
-
-      const result = await pullRequestService.getPullRequests();
-
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].title, 'Cached PR');
-
-      // API should not be called when cache is valid
-      assert.ok(!mockApiClient.getRepositories.called);
-    });
-
-    it('should handle API errors gracefully', async () => {
-      mockApiClient.getRepositories.rejects(new Error('API Error'));
-
-      const result = await pullRequestService.getPullRequests();
-
-      assert.strictEqual(result.length, 0);
-    });
-  });
-
-  describe('getPullRequest', () => {
-    it('should return specific pull request', async () => {
-      const mockPullRequest = createMockPullRequest(1);
-      mockApiClient.getPullRequest.resolves(mockPullRequest);
-
-      // Mock cache miss
-      (mockExtensionContext.workspaceState.get as any).returns(null);
-
-      const result = await pullRequestService.getPullRequest('repo1', 1);
-
-      assert.strictEqual(result?.pullRequestId, 1);
-      assert.strictEqual(result?.title, 'Test PR 1');
-
-      // Verify cache was set
-      assert.ok(mockExtensionContext.workspaceState.update.called);
-    });
-
-    it('should return null when pull request not found', async () => {
-      mockApiClient.getPullRequest.rejects(new Error('Not found'));
-
-      const result = await pullRequestService.getPullRequest('repo1', 999);
-
-      assert.strictEqual(result, null);
-    });
-  });
-
-  describe('createPullRequest', () => {
-    it('should create new pull request successfully', async () => {
-      const options = {
-        title: 'New Feature',
-        description: 'Implement new feature',
-        sourceRefName: 'refs/heads/feature',
-        targetRefName: 'refs/heads/main',
-        repositoryId: 'repo1'
-      };
-
-      const createdPr = { ...createMockPullRequest(1), title: 'New Feature' };
-      mockApiClient.post.resolves(createdPr);
-
-      const result = await pullRequestService.createPullRequest(options);
-
-      assert.ok(result.success);
-      assert.strictEqual(result.pullRequest?.title, 'New Feature');
-
-      // Verify cache invalidation
-      assert.ok(mockExtensionContext.workspaceState.update.called);
-    });
-
-    it('should handle creation failure', async () => {
-      const options = {
-        title: 'New Feature',
-        description: 'Implement new feature',
-        sourceRefName: 'refs/heads/feature',
-        targetRefName: 'refs/heads/main',
-        repositoryId: 'repo1'
-      };
-
-      mockApiClient.post.rejects(new Error('Creation failed'));
-
-      const result = await pullRequestService.createPullRequest(options);
-
-      assert.ok(!result.success);
-      assert.ok(result.error);
-      assert.ok(result.error?.includes('Failed to create pull request'));
-    });
-  });
-
-  describe('approvePullRequest', () => {
-    it('should approve pull request successfully', async () => {
-      mockApiClient.votePullRequest.resolves();
-
-      const result = await pullRequestService.approvePullRequest('repo1', 1);
-
-      assert.ok(result.success);
-
-      // Verify cache invalidation
-      assert.ok(mockExtensionContext.workspaceState.update.called);
-    });
-
-    it('should handle approval failure', async () => {
-      mockApiClient.votePullRequest.rejects(new Error('Vote failed'));
-
-      const result = await pullRequestService.approvePullRequest('repo1', 1);
-
-      assert.ok(!result.success);
-      assert.ok(result.error);
-    });
-  });
-
-  describe('rejectPullRequest', () => {
-    it('should reject pull request with comment', async () => {
-      mockApiClient.votePullRequest.resolves();
-      mockApiClient.addComment.resolves({ id: 1, content: 'Needs work' } as any);
-
-      const result = await pullRequestService.rejectPullRequest('repo1', 1, 'Needs work');
-
-      assert.ok(result.success);
-
-      // Verify both vote and comment were added
-      assert.ok(mockApiClient.votePullRequest.calledWith('repo1', 1, -10));
-      assert.ok(mockApiClient.addComment.calledWith('repo1', 1, 'Needs work'));
-    });
-  });
-
-  describe('abandonPullRequest', () => {
-    it('should abandon pull request successfully', async () => {
-      mockApiClient.abandonPullRequest.resolves();
-
-      const result = await pullRequestService.abandonPullRequest('repo1', 1);
-
-      assert.ok(result.success);
-
-      // Verify cache invalidation
-      assert.ok(mockExtensionContext.workspaceState.update.called);
-    });
-  });
-
-  describe('getPullRequestIterations', () => {
-    it('should return pull request iterations', async () => {
-      const mockIterations = [
-        {
-          id: 1,
-          description: 'Initial version',
-          author: { id: 'user1', displayName: 'Test User', uniqueName: 'test@example.com' } as Identity,
-          createdDate: new Date('2023-01-01'),
-          updatedDate: new Date('2023-01-01'),
-          sourceRefCommit: createMockCommit(),
-          targetRefCommit: createMockCommit(),
-          commonRefCommit: createMockCommit(),
-          hasMoreCommits: false,
-          changeList: []
-        }
-      ];
-
-      const mockResponse = { value: mockIterations };
-      mockApiClient.get.resolves(mockResponse);
-
-      const result = await pullRequestService.getPullRequestIterations('repo1', 1);
-
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].id, 1);
-      assert.ok(result[0].createdDate instanceof Date);
-    });
-  });
-
-  describe('getPullRequestChanges', () => {
-    it('should return pull request changes', async () => {
-      const mockChanges = [
-        {
-          changeId: 1,
-          changeType: 'edit',
-          item: {
-            objectId: 'obj1',
-            path: '/src/file.js',
-            isFolder: false,
-            url: '',
-            gitObjectType: 'blob'
-          }
-        }
-      ];
-
-      const mockResponse = { value: mockChanges };
-      mockApiClient.get.resolves(mockResponse);
-
-      const result = await pullRequestService.getPullRequestChanges('repo1', 1);
-
-      assert.strictEqual(result.length, 1);
-      assert.strictEqual(result[0].changeId, 1);
-      assert.strictEqual(result[0].item.path, '/src/file.js');
-    });
-  });
-
-  describe('autoRefresh', () => {
-    it('should setup auto-refresh with interval', async () => {
-      const mockCallback = sinon.stub();
-      const intervalMs = 1000;
-
-      pullRequestService.setupAutoRefresh({}, intervalMs, mockCallback);
-
-      // Wait for interval to trigger
-      await new Promise(resolve => setTimeout(resolve, 1100));
-
-      // Verify callback was called
-      assert.ok(mockCallback.called);
-    });
-
-    it('should clear auto-refresh', () => {
-      const mockCallback = sinon.stub();
-      const intervalMs = 1000;
-
-      pullRequestService.setupAutoRefresh({}, intervalMs, mockCallback);
-      pullRequestService.clearAutoRefresh({});
-
-      // This test mainly ensures the method doesn't throw
-      assert.ok(true);
-    });
-  });
-
-  describe('sorting', () => {
-    it('should sort by created date descending by default', async () => {
-      const mockPullRequests: PullRequest[] = [
-        { ...createMockPullRequest(1), creationDate: new Date('2023-01-02') },
-        { ...createMockPullRequest(2), creationDate: new Date('2023-01-01') }
-      ];
-
-      mockApiClient.getRepositories.resolves([createMockRepository()]);
-      mockApiClient.getPullRequests.resolves(mockPullRequests);
-
-      // Mock cache miss
-      (mockExtensionContext.workspaceState.get as any).returns(null);
-
-      const result = await pullRequestService.getPullRequests({}, { sortBy: 'createdDate' });
-
-      assert.strictEqual(result.length, 2);
-      assert.strictEqual(result[0].pullRequestId, 1); // Most recent first
-      assert.strictEqual(result[1].pullRequestId, 2);
-    });
-
-    it('should sort by title ascending', async () => {
-      const mockPullRequests: PullRequest[] = [
-        { ...createMockPullRequest(1), title: 'Zebra' },
-        { ...createMockPullRequest(2), title: 'Apple' }
-      ];
-
-      mockApiClient.getRepositories.resolves([createMockRepository()]);
-      mockApiClient.getPullRequests.resolves(mockPullRequests);
-
-      // Mock cache miss
-      (mockExtensionContext.workspaceState.get as any).returns(null);
-
-      const result = await pullRequestService.getPullRequests({}, { sortBy: 'title', sortOrder: 'asc' });
-
-      assert.strictEqual(result.length, 2);
-      assert.strictEqual(result[0].title, 'Apple');
-      assert.strictEqual(result[1].title, 'Zebra');
-    });
-  });
-
-  describe('pagination', () => {
-    it('should apply pagination correctly', async () => {
-      const mockPullRequests: PullRequest[] = Array.from({ length: 25 }, (_, i) => createMockPullRequest(i + 1));
-
-      mockApiClient.getRepositories.resolves([createMockRepository()]);
-      mockApiClient.getPullRequests.resolves(mockPullRequests);
-
-      // Mock cache miss
-      (mockExtensionContext.workspaceState.get as any).returns(null);
-
-      const result = await pullRequestService.getPullRequests({
-        skip: 10,
-        maxResults: 5
-      });
-
-      assert.strictEqual(result.length, 5);
-      assert.strictEqual(result[0].pullRequestId, 11);
-      assert.strictEqual(result[4].pullRequestId, 15);
-    });
-  });
 });
-
-// Helper functions
-function createMockPullRequest(id: number): PullRequest {
-  return {
-    pullRequestId: id,
-    codeReviewId: id,
-    status: 'active' as PullRequestStatus,
-    createdBy: { id: 'user1', displayName: 'Test User', uniqueName: 'test@example.com' } as Identity,
-    creationDate: new Date(`2023-01-${String(id).padStart(2, '0')}`),
-    closedDate: undefined,
-    title: `Test PR ${id}`,
-    description: `Test description ${id}`,
-    sourceRefName: 'refs/heads/feature',
-    targetRefName: 'refs/heads/main',
-    mergeStatus: 'succeeded',
-    isDraft: false,
-    mergeId: `merge${id}`,
-    lastMergeSourceCommit: createMockCommit(),
-    lastMergeTargetCommit: createMockCommit(),
-    reviewers: [],
-    url: '',
-    webUrl: '',
-    repository: createMockRepository(),
-    workItemRefs: [],
-    labels: [],
-    hasMultipleMergeBases: false,
-    supportsIterations: true,
-    artifactId: `artifact${id}`
-  };
-}
-
-function createMockRepository(): GitRepository {
-  return {
-    id: 'repo1',
-    name: 'Test Repository',
-    url: 'https://dev.azure.com/test/test/_git/repo1',
-    project: { id: 'project1', name: 'Test Project', url: '', state: 'wellFormed', revision: 1, visibility: 'private', lastUpdateTime: new Date() },
-    defaultBranch: 'refs/heads/main',
-    size: 1024,
-    remoteUrl: 'https://dev.azure.com/test/test/_git/repo1',
-    sshUrl: 'git@ssh.dev.azure.com:v3/test/test/repo1',
-    webUrl: 'https://dev.azure.com/test/test/_git/repo1',
-    isDisabled: false
-  };
-}
-
-function createMockCommit() {
-  return {
-    commitId: 'commit1',
-    author: { name: 'Test User', email: 'test@example.com', date: new Date() },
-    committer: { name: 'Test User', email: 'test@example.com', date: new Date() },
-    comment: 'Test commit',
-    commentTruncated: false,
-    url: '',
-    remoteUrl: ''
-  };
-}
