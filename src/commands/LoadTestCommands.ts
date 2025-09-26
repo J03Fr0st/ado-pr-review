@@ -746,7 +746,7 @@ export class LoadTestCommands {
           <div class="recommendations">
             <h3>🔧 Recommendations</h3>
             <ul>
-              ${results.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+              ${results.recommendations.map((rec: string) => `<li>${rec}</li>`).join('')}
             </ul>
           </div>
         ` : ''}
@@ -892,5 +892,15 @@ export class LoadTestCommands {
     if (bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  /**
+   * Dispose of resources
+   */
+  dispose(): void {
+    // Clean up any resources if needed
+    this.loadTestRunner = null!;
+    this.loadTestScenarios = null!;
+    this.telemetryService = null!;
   }
 }

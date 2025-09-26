@@ -6,6 +6,7 @@ import { CommentService } from "./services/CommentService";
 import { ConfigurationService } from "./services/ConfigurationService";
 import { AuthenticationService } from "./services/AuthenticationService";
 import { TelemetryService } from "./services/TelemetryService";
+import { MonitoringService } from "./services/MonitoringService";
 import { AzureDevOpsApiClient } from "./api/AzureDevOpsApiClient";
 import { LoadTestCommands } from "./commands/LoadTestCommands";
 
@@ -44,6 +45,9 @@ export async function activate(
       context
     );
 
+    // Initialize monitoring service with dependencies
+    const monitoringService = MonitoringService.getInstance(context, apiClient, configurationService, authenticationService);
+
     // Set authentication service on pull request service
     (pullRequestService as any).setAuthService(authenticationService);
 
@@ -80,7 +84,7 @@ export async function activate(
       }
     );
 
-    context.subscriptions.push(extensionController, loadTestCommands, disposable);
+    context.subscriptions.push(extensionController, loadTestCommands, monitoringService, disposable);
 
     // Track activation event
     telemetryService.trackEvent("extensionActivated");
@@ -103,4 +107,15 @@ export async function activate(
  */
 export function deactivate(): void {
   console.log("Azure DevOps PR Reviewer extension is being deactivated...");
+
+  try {
+    // Dispose monitoring service
+    const monitoringService = MonitoringService.getInstance();
+    monitoringService.dispose();
+  } catch (error) {
+    console.error(
+      "Error deactivating Azure DevOps PR Reviewer extension:",
+      error
+    );
+  }
 }

@@ -3,7 +3,17 @@ import axios, {
   AxiosRequestConfig,
   AxiosResponse,
   AxiosError,
+  InternalAxiosRequestConfig,
 } from "axios";
+
+/**
+ * Extended Axios request config with metadata for monitoring
+ */
+interface ExtendedAxiosRequestConfig extends InternalAxiosRequestConfig {
+  metadata?: {
+    startTime?: number;
+  };
+}
 import * as vscode from "vscode";
 import { AuthenticationService } from "../services/AuthenticationService";
 import { ConfigurationService } from "../services/ConfigurationService";
@@ -88,6 +98,7 @@ export class AzureDevOpsApiClient {
   private readonly memoryCache = new Map<string, CacheEntry<any>>();
   private readonly rateLimitTracker: number[] = [];
   private readonly sessionStorage: vscode.Memento;
+  private requestCallbacks: Array<(duration: number, endpoint: string, success: boolean) => void> = [];
 
   constructor(
     private readonly authService: AuthenticationService,
@@ -420,7 +431,10 @@ export class AzureDevOpsApiClient {
    */
   private setupRequestInterceptors(): void {
     this.axiosInstance.interceptors.request.use(
-      async (config) => {
+      async (config: ExtendedAxiosRequestConfig) => {
+        // Add timing metadata for monitoring
+        config.metadata = { ...config.metadata, startTime: Date.now() };
+
         // Add authentication header
         const authHeader = await this.authService.getAuthHeader();
         if (authHeader) {
@@ -447,8 +461,25 @@ export class AzureDevOpsApiClient {
    */
   private setupResponseInterceptors(): void {
     this.axiosInstance.interceptors.response.use(
-      (response) => response,
+      (response) => {
+        // Track successful request timing
+        const startTime = (response.config as any).metadata?.startTime;
+        if (startTime) {
+          const duration = Date.now() - startTime;
+          const endpoint = this.extractEndpointFromUrl(response.config.url || '');
+          this.notifyRequestCallbacks(duration, endpoint, true);
+        }
+        return response;
+      },
       async (error: AxiosError) => {
+        // Track failed request timing
+        const startTime = (error.config as any)?.metadata?.startTime;
+        if (startTime) {
+          const duration = Date.now() - startTime;
+          const endpoint = this.extractEndpointFromUrl(error.config?.url || '');
+          this.notifyRequestCallbacks(duration, endpoint, false);
+        }
+
         const config = error.config as any;
 
         // Handle rate limiting
@@ -749,5 +780,54 @@ export class AzureDevOpsApiClient {
    */
   private delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Register callback for request completion notifications
+   */
+  public onRequestCompleted(callback: (duration: number, endpoint: string, success: boolean) => void): void {
+    this.requestCallbacks.push(callback);
+  }
+
+  /**
+   * Remove callback for request completion notifications
+   */
+  public removeRequestCallback(callback: (duration: number, endpoint: string, success: boolean) => void): void {
+    const index = this.requestCallbacks.indexOf(callback);
+    if (index > -1) {
+      this.requestCallbacks.splice(index, 1);
+    }
+  }
+
+  /**
+   * Notify all registered callbacks about request completion
+   */
+  private notifyRequestCallbacks(duration: number, endpoint: string, success: boolean): void {
+    this.requestCallbacks.forEach(callback => {
+      try {
+        callback(duration, endpoint, success);
+      } catch (error) {
+        console.error('Error in request callback:', error);
+      }
+    });
+  }
+
+  /**
+   * Extract endpoint name from URL for monitoring
+   */
+  private extractEndpointFromUrl(url: string): string {
+    try {
+      // Remove organization URL and API version parameters
+      const config = this.configService.getConfiguration();
+      if (config.organizationUrl && url.startsWith(config.organizationUrl)) {
+        const relativeUrl = url.substring(config.organizationUrl.length);
+        // Extract the main endpoint (e.g., _apis/git/repositories, _apis/git/pullrequests)
+        const match = relativeUrl.match(/\/(_apis\/[^\/?]+)/);
+        return match ? match[1] : 'unknown';
+      }
+      return 'external';
+    } catch {
+      return 'unknown';
+    }
   }
 }
