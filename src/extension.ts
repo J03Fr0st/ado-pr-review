@@ -1,12 +1,9 @@
 import * as vscode from "vscode";
 import { ExtensionController } from "./providers/ExtensionController";
-import { PRDetailWebView } from "./webview/PRDetailWebView";
-import { PullRequestService } from "./services/PullRequestService";
-import { CommentService } from "./services/CommentService";
-import { ConfigurationService } from "./services/ConfigurationService";
-import { AuthenticationService } from "./services/AuthenticationService";
 import { TelemetryService } from "./services/TelemetryService";
 import { MonitoringService } from "./services/MonitoringService";
+import { ConfigurationService } from "./services/ConfigurationService";
+import { AuthenticationService } from "./services/AuthenticationService";
 import { AzureDevOpsApiClient } from "./api/AzureDevOpsApiClient";
 // import { LoadTestCommands } from "./commands/LoadTestCommands";
 
@@ -19,7 +16,7 @@ export async function activate(
   try {
     console.log("Azure DevOps PR Reviewer extension is being activated...");
 
-    // Initialize services
+    // Initialize core services
     const configurationService = new ConfigurationService();
     const authenticationService = new AuthenticationService(
       context,
@@ -34,21 +31,16 @@ export async function activate(
       configurationService,
       context
     );
-    const pullRequestService = new PullRequestService(
+
+    // Initialize monitoring service
+    const monitoringService = MonitoringService.getInstance(
+      context,
       apiClient,
       configurationService,
-      context
-    );
-    const commentService = new CommentService(
-      apiClient,
-      configurationService,
-      context
+      authenticationService
     );
 
-    // Initialize monitoring service with dependencies
-    const monitoringService = MonitoringService.getInstance(context, apiClient, configurationService, authenticationService);
-
-    // Initialize extension controller (handles all command registration)
+    // Initialize extension controller (handles all services and commands)
     const extensionController = new ExtensionController(context, apiClient);
 
     // Initialize load testing commands (temporarily disabled during TS5 migration)

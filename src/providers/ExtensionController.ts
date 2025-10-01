@@ -93,6 +93,9 @@ export class ExtensionController implements vscode.Disposable {
    */
   private async initialize(): Promise<void> {
     try {
+      // Initialize cache manager
+      await this.cacheManager.initialize();
+
       // Register tree view
       const treeView = vscode.window.createTreeView("azureDevOpsPRs", {
         treeDataProvider: this.treeProvider,
@@ -100,6 +103,9 @@ export class ExtensionController implements vscode.Disposable {
       });
 
       this.disposables.push(treeView);
+
+      // Load initial pull requests after cache is initialized
+      await this.treeProvider.refresh();
 
       // Register commands
       this.registerCommands();

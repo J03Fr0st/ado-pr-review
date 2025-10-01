@@ -3,7 +3,7 @@ import { PullRequestService } from "../services/PullRequestService";
 import { StateManager } from "../services/StateManager";
 import { TelemetryService } from "../services/TelemetryService";
 import { IntegrationService } from "../services/IntegrationService";
-import { PullRequest, PullRequestStatus, GitRepository } from "../api/models";
+import { PullRequest, GitRepository } from "../api/models";
 
 /**
  * Tree item types
@@ -207,7 +207,7 @@ export class PullRequestTreeProvider
     private readonly telemetryService: TelemetryService,
     private readonly integrationService?: IntegrationService
   ) {
-    this.loadPullRequests();
+    // Don't load pull requests in constructor - will be initialized by ExtensionController
   }
 
   /**
@@ -348,7 +348,7 @@ export class PullRequestTreeProvider
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
     this.telemetryService.trackError(operation, error as Error);
-    console.error(`Error in ${operation}:`, error);
+    console.error(`Error in ${operation}:`, errorMessage);
   }
 
   /**
