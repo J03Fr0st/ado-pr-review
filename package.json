@@ -203,7 +203,7 @@
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "npm run clean && npm run compile",
-    "clean": "rimraf out dist",
+    "clean": "node -e \"require('rimraf').rimraf(['out', 'dist'])\"",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
     "webpack": "webpack --mode production",
@@ -227,21 +227,21 @@
     "@types/vscode": "^1.74.0",
     "@types/node": "^18.0.0",
     "@types/jest": "^29.5.0",
-    "@typescript-eslint/eslint-plugin": "^5.45.0",
-    "@typescript-eslint/parser": "^5.45.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
     "@playwright/test": "^1.28.0",
-    "eslint": "^8.28.0",
-    "prettier": "^2.8.0",
-    "typescript": "^4.9.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
     "ts-node": "^10.9.0",
     "jest": "^29.5.0",
     "ts-jest": "^29.1.0",
-    "rimraf": "^3.0.2",
+    "rimraf": "^4.0.0",
     "webpack": "^5.75.0",
     "webpack-cli": "^5.0.0"
   },
   "dependencies": {
-    "vscode-extension-telemetry": "^0.4.5",
+    "@vscode/extension-telemetry": "^0.9.0",
     "axios": "^1.2.0"
   },
   "repository": {

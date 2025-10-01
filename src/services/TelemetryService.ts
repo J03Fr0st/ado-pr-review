@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import TelemetryReporter from "vscode-extension-telemetry";
+import TelemetryReporter from "@vscode/extension-telemetry";
 
 /**
  * Telemetry service for collecting usage analytics and error reporting
@@ -15,8 +15,8 @@ export class TelemetryService {
 
   // Telemetry configuration
   private readonly config = {
-    // Application Insights key for VS Code extensions
-    aiKey: process.env.TELEMETRY_AI_KEY || "your-ai-key-here",
+    // Application Insights connection string for VS Code extensions
+    connectionString: process.env.TELEMETRY_CONNECTION_STRING || "your-connection-string-here",
 
     // Events that require user consent
     sensitiveEvents: [
@@ -88,12 +88,8 @@ export class TelemetryService {
       // Only enable if both VS Code and extension settings allow it
       this.enabled = vsCodeTelemetryEnabled && extensionTelemetryEnabled;
 
-      if (this.enabled && this.config.aiKey !== "your-ai-key-here") {
-        this.reporter = new TelemetryReporter(
-          this.extensionId,
-          this.extensionVersion,
-          this.config.aiKey
-        );
+      if (this.enabled && this.config.connectionString !== "your-connection-string-here") {
+        this.reporter = new TelemetryReporter(this.config.connectionString);
 
         console.log("📊 Telemetry service initialized");
         this.trackEvent("telemetry.initialized", { sessionId: this.sessionId });
