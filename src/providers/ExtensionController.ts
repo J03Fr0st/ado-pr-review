@@ -11,6 +11,20 @@ import { ErrorHandler, ErrorCategory } from "../utils/ErrorHandler";
 import { AzureDevOpsApiClient } from "../api/AzureDevOpsApiClient";
 import { IntegrationService } from "../services/IntegrationService";
 import { WorkflowService, WorkflowResult } from "../services/WorkflowService";
+import { PullRequest, GitRepository, CommentThread } from "../api/models";
+
+// Type for tree item data passed to command handlers
+interface PullRequestTreeItemData {
+  repository: GitRepository;
+  pullRequest: PullRequest;
+  repositoryId: string;
+  pullRequestId: number;
+}
+
+// Type for webview messages
+interface WebviewMessage {
+  command: "approve" | "reject" | "comment";
+}
 
 /**
  * Main extension entry point and controller
@@ -146,7 +160,7 @@ export class ExtensionController implements vscode.Disposable {
     this.disposables.push(
       vscode.commands.registerCommand(
         "azureDevOps.approvePullRequest",
-        (item) => {
+        (item: PullRequestTreeItemData) => {
           this.approvePullRequest(item);
         }
       )
@@ -155,7 +169,7 @@ export class ExtensionController implements vscode.Disposable {
     this.disposables.push(
       vscode.commands.registerCommand(
         "azureDevOps.rejectPullRequest",
-        (item) => {
+        (item: PullRequestTreeItemData) => {
           this.rejectPullRequest(item);
         }
       )
@@ -164,26 +178,26 @@ export class ExtensionController implements vscode.Disposable {
     this.disposables.push(
       vscode.commands.registerCommand(
         "azureDevOps.abandonPullRequest",
-        (item) => {
+        (item: PullRequestTreeItemData) => {
           this.abandonPullRequest(item);
         }
       )
     );
 
     this.disposables.push(
-      vscode.commands.registerCommand("azureDevOps.addComment", (item) => {
+      vscode.commands.registerCommand("azureDevOps.addComment", (item: PullRequestTreeItemData) => {
         this.addComment(item);
       })
     );
 
     this.disposables.push(
-      vscode.commands.registerCommand("azureDevOps.openInBrowser", (item) => {
+      vscode.commands.registerCommand("azureDevOps.openInBrowser", (item: PullRequestTreeItemData) => {
         this.openInBrowser(item);
       })
     );
 
     this.disposables.push(
-      vscode.commands.registerCommand("azureDevOps.openPullRequest", (item) => {
+      vscode.commands.registerCommand("azureDevOps.openPullRequest", (item: PullRequestTreeItemData) => {
         this.openPullRequest(item);
       })
     );
@@ -192,7 +206,7 @@ export class ExtensionController implements vscode.Disposable {
     this.disposables.push(
       vscode.commands.registerCommand(
         "azureDevOps.startPullRequestReview",
-        async (item) => {
+        async (item: PullRequestTreeItemData) => {
           if (item && item.repositoryId && item.pullRequestId) {
             try {
               const result =
@@ -222,19 +236,25 @@ export class ExtensionController implements vscode.Disposable {
               prompt: "Enter source branch name",
               placeHolder: "feature/new-feature",
             });
-            if (!sourceBranch) return;
+            if (!sourceBranch) {
+              return;
+            }
 
             const targetBranch = await vscode.window.showInputBox({
               prompt: "Enter target branch name",
               placeHolder: "main",
             });
-            if (!targetBranch) return;
+            if (!targetBranch) {
+              return;
+            }
 
             const title = await vscode.window.showInputBox({
               prompt: "Enter pull request title",
               placeHolder: "Add new feature",
             });
-            if (!title) return;
+            if (!title) {
+              return;
+            }
 
             const description = await vscode.window.showInputBox({
               prompt: "Enter pull request description (optional)",
@@ -484,7 +504,7 @@ export class ExtensionController implements vscode.Disposable {
   /**
    * Approve a pull request
    */
-  private async approvePullRequest(item: any): Promise<void> {
+  private async approvePullRequest(item: PullRequestTreeItemData): Promise<void> {
     try {
       if (!item || !item.pullRequest) {
         vscode.window.showErrorMessage("No pull request selected");
@@ -517,7 +537,7 @@ export class ExtensionController implements vscode.Disposable {
   /**
    * Reject a pull request
    */
-  private async rejectPullRequest(item: any): Promise<void> {
+  private async rejectPullRequest(item: PullRequestTreeItemData): Promise<void> {
     try {
       if (!item || !item.pullRequest) {
         vscode.window.showErrorMessage("No pull request selected");
@@ -566,7 +586,7 @@ export class ExtensionController implements vscode.Disposable {
   /**
    * Abandon a pull request
    */
-  private async abandonPullRequest(item: any): Promise<void> {
+  private async abandonPullRequest(item: PullRequestTreeItemData): Promise<void> {
     try {
       if (!item || !item.pullRequest) {
         vscode.window.showErrorMessage("No pull request selected");
@@ -610,7 +630,7 @@ export class ExtensionController implements vscode.Disposable {
   /**
    * Add a comment to a pull request
    */
-  private async addComment(item: any): Promise<void> {
+  private async addComment(item: PullRequestTreeItemData): Promise<void> {
     try {
       if (!item || !item.pullRequest) {
         vscode.window.showErrorMessage("No pull request selected");
@@ -657,7 +677,7 @@ export class ExtensionController implements vscode.Disposable {
   /**
    * Open pull request in browser
    */
-  private async openInBrowser(item: any): Promise<void> {
+  private async openInBrowser(item: PullRequestTreeItemData): Promise<void> {
     try {
       if (!item || !item.pullRequest) {
         vscode.window.showErrorMessage("No pull request selected");
@@ -679,7 +699,7 @@ export class ExtensionController implements vscode.Disposable {
   /**
    * Open pull request detail view
    */
-  private async openPullRequest(item: any): Promise<void> {
+  private async openPullRequest(item: PullRequestTreeItemData): Promise<void> {
     try {
       if (!item || !item.pullRequest) {
         vscode.window.showErrorMessage("No pull request selected");
@@ -736,7 +756,11 @@ export class ExtensionController implements vscode.Disposable {
   /**
    * Generate webview content for PR details
    */
-  private getPRDetailWebviewContent(prDetails: any): string {
+  private getPRDetailWebviewContent(prDetails: {
+    pullRequest: PullRequest;
+    fileCount: number;
+    commentThreads: CommentThread[];
+  }): string {
     return `
             <!DOCTYPE html>
             <html>
@@ -787,14 +811,16 @@ export class ExtensionController implements vscode.Disposable {
                     })</div>
                     ${prDetails.commentThreads
                       .map(
-                        (thread: any) => `
+                        (thread: CommentThread) => `
                         <div class="comment">
                             <div class="meta">${
                               thread.comments?.[0]?.author?.displayName ||
                               "Unknown"
-                            } - ${new Date(
-                          thread.comments?.[0]?.publishedDate || Date.now()
-                        ).toLocaleString()}</div>
+                            } - ${
+                          thread.comments?.[0]?.publishedDate
+                            ? thread.comments[0].publishedDate.toLocaleString()
+                            : new Date().toLocaleString()
+                        }</div>
                             <div>${thread.comments?.[0]?.content || ""}</div>
                         </div>
                     `
@@ -831,7 +857,7 @@ export class ExtensionController implements vscode.Disposable {
   /**
    * Handle messages from webview
    */
-  private async handleWebviewMessage(message: any, item: any): Promise<void> {
+  private async handleWebviewMessage(message: WebviewMessage, item: PullRequestTreeItemData): Promise<void> {
     switch (message.command) {
       case "approve":
         await this.approvePullRequest(item);
