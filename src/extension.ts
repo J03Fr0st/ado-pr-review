@@ -8,7 +8,7 @@ import { AuthenticationService } from "./services/AuthenticationService";
 import { TelemetryService } from "./services/TelemetryService";
 import { MonitoringService } from "./services/MonitoringService";
 import { AzureDevOpsApiClient } from "./api/AzureDevOpsApiClient";
-import { LoadTestCommands } from "./commands/LoadTestCommands";
+// import { LoadTestCommands } from "./commands/LoadTestCommands";
 
 /**
  * Extension activation entry point
@@ -48,43 +48,13 @@ export async function activate(
     // Initialize monitoring service with dependencies
     const monitoringService = MonitoringService.getInstance(context, apiClient, configurationService, authenticationService);
 
-    // Set authentication service on pull request service
-    (pullRequestService as any).setAuthService(authenticationService);
-
-    // Initialize extension controller
+    // Initialize extension controller (handles all command registration)
     const extensionController = new ExtensionController(context, apiClient);
 
-    // Initialize load testing commands
-    const loadTestCommands = new LoadTestCommands(context);
+    // Initialize load testing commands (temporarily disabled during TS5 migration)
+    // const loadTestCommands = new LoadTestCommands(context);
 
-    // Register webview command
-    const disposable = vscode.commands.registerCommand(
-      "azureDevOps.openPullRequest",
-      async (item) => {
-        try {
-          if (!item || !item.pullRequest) {
-            vscode.window.showErrorMessage("No pull request selected");
-            return;
-          }
-
-          const webView = new PRDetailWebView(
-            item.pullRequest,
-            item.repository.id,
-            pullRequestService,
-            commentService,
-            telemetryService,
-            context.extensionUri
-          );
-
-          context.subscriptions.push(webView);
-        } catch (error) {
-          vscode.window.showErrorMessage("Failed to open pull request details");
-          console.error("Error opening pull request details:", error);
-        }
-      }
-    );
-
-    context.subscriptions.push(extensionController, loadTestCommands, monitoringService, disposable);
+    context.subscriptions.push(extensionController, monitoringService);
 
     // Track activation event
     telemetryService.trackEvent("extensionActivated");
